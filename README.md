@@ -1,13 +1,7 @@
-# hw_01
+# Vibe Agentic Coding Robot Dreams Course Tasks
 
-Jednoduchy Python projekt pro tool calling nad OpenAI API.
+Repozitar je pripraveny pro vice samostatnych programu a ukolu.
 
-## Spusteni pres `uv`
+## Obsah
 
-```bash
-cd hw_01
-uv sync
-uv run python main.py
-```
-
-`api.py` je lokalni soubor s API klicem a je v `.gitignore`.
+- `hw_01/` - jednoducha ukazka OpenAI tool callingu spoustena pres `uv`
