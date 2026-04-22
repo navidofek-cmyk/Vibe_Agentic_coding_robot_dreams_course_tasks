@@ -1,19 +1,22 @@
 # nanoclone
 
-Terminálový textový editor inspirovaný nano, napsaný v C++17.
+Terminálový textový editor inspirovaný nano, napsaný v C++17.  
+Žádné externí závislosti — pouze standardní knihovna a kompilátor.
 
 ## Funkce
 
 - Více otevřených souborů najednou (taby)
 - Boční panel pro procházení souborového systému
-- Hledání textu
-- Seznam naposledy otevřených souborů (uložen v SQLite)
-- Připraveno pro budoucí syntax highlighting
+- Hledání textu (`Ctrl+F`)
+- Seznam naposledy otevřených souborů (`Ctrl+R`)
+- Syntax highlighting pro C/C++, Python, JS/TS, HTML, CSS
 
 ## Závislosti
 
+Žádné. Stačí `g++` s podporou C++17:
+
 ```bash
-sudo apt-get install libncurses-dev libsqlite3-dev
+sudo apt-get install build-essential   # pokud ještě nemáš g++
 ```
 
 ## Sestavení
@@ -29,8 +32,8 @@ make clean    # smaže build/
 
 ```bash
 ./build/nanoclone               # prázdný editor
-./build/nanoclone soubor.txt    # otevře soubor
-./build/nanoclone a.txt b.cpp   # otevře více souborů najednou
+./build/nanoclone soubor.cpp    # otevře soubor (automaticky syntax highlight)
+./build/nanoclone a.txt b.py    # otevře více souborů jako taby
 ```
 
 ## Klávesové zkratky
@@ -45,8 +48,8 @@ make clean    # smaže build/
 | `Ctrl+O` | Otevřít / zavřít boční panel |
 | `Ctrl+F` | Hledat text |
 | `Ctrl+R` | Naposledy otevřené soubory |
-| `F3` | Přepnout na předchozí tab |
-| `F4` | Přepnout na další tab |
+| `Ctrl+A` | Předchozí tab |
+| `Ctrl+T` | Další tab |
 | `PgUp / PgDn` | Rychlá navigace |
 | `Home / End` | Začátek / konec řádku |
 
@@ -54,16 +57,17 @@ make clean    # smaže build/
 
 | Zkratka | Akce |
 |---------|------|
+| `↑ / ↓` | Navigace |
 | `Enter` | Otevřít soubor / vstoupit do adresáře |
-| `[..]` + `Enter` | Přejít o úroveň výš |
 | `Esc` | Zpět do editoru |
 
-### Obecné
+### Při zavírání neuloženého souboru
 
-| Zkratka | Akce |
+| Klávesa | Akce |
 |---------|------|
-| `Esc` | Zrušit aktuální akci / zavřít dialog |
-| `S / D / C` | Při zavírání neuloženého souboru: Save / Discard / Cancel |
+| `S` | Uložit a zavřít |
+| `D` | Zahodit změny |
+| `C` / `Esc` | Zrušit |
 
 ## Struktura projektu
 
@@ -72,34 +76,38 @@ nano-clone/
 ├── Makefile
 ├── CMakeLists.txt
 └── src/
-    ├── main.cpp          # vstupní bod
-    ├── highlight.h       # interface pro syntax highlighting (budoucí rozšíření)
-    ├── buffer.h/cpp      # textový buffer, kurzor, scroll, vyhledávání
-    ├── database.h/cpp    # SQLite — seznam posledních souborů
-    ├── filepanel.h/cpp   # prohlížeč adresářů
-    └── editor.h/cpp      # ncurses UI, správa tabů, vstup
+    ├── main.cpp           # vstupní bod
+    ├── highlight.h        # ColorSpan, SyntaxHighlighter base class
+    ├── highlighters.h/cpp # C/C++, Python, JS/TS, HTML, CSS + factory
+    ├── buffer.h/cpp       # textový buffer, kurzor, scroll, vyhledávání
+    ├── database.h/cpp     # seznam posledních souborů (~/.local/share/nanoclone/)
+    ├── filepanel.h/cpp    # prohlížeč adresářů (boční panel)
+    ├── terminal.h/cpp     # raw termios, ANSI I/O, Key:: konstanty
+    └── editor.h/cpp       # render loop, správa tabů, mode dispatch
 ```
 
 ## Přidání syntax highlighting
 
-Implementuj třídu děděnou z `SyntaxHighlighter` v `highlight.h`:
+Implementuj třídu děděnou z `SyntaxHighlighter`:
 
 ```cpp
-class MyCppHighlighter : public SyntaxHighlighter {
+#include "highlight.h"
+
+class MyHighlighter : public SyntaxHighlighter {
 public:
-    std::vector<ColorSpan> highlight(const std::string& line, int row) override;
-    bool supportsFile(const std::string& filename) const override;
+    std::vector<ColorSpan> highlight(const std::string& line, int row) override {
+        // vrať seznam ColorSpan { col, len, HL::KEYWORD/STRING/... }
+    }
+    bool supportsFile(const std::string& filename) const override {
+        return filename.ends_with(".xyz");
+    }
 };
 ```
 
-A předej ji bufferu:
+Dostupné typy barev (`HL::`): `KEYWORD`, `STRING`, `COMMENT`, `NUMBER`, `PREPROC`, `TYPE`, `TAG`, `ATTR`, `SELECTOR`, `PROPERTY`.
 
-```cpp
-buffer->setHighlighter(new MyCppHighlighter());
-```
-
-`ColorSpan` určuje sloupec, délku a ncurses color pair pro každý zvýrazněný úsek.
+Zaregistruj ji v `makeHighlighter()` v `highlighters.cpp`.
 
 ## Naposledy otevřené soubory
 
-Ukládají se do `~/.local/share/nanoclone/recent.db` (SQLite).
+Ukládají se do `~/.local/share/nanoclone/recent.txt` (plain text, bez SQLite).
