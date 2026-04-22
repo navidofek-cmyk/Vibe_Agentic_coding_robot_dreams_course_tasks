@@ -1,4 +1,4 @@
-"""Terminal Maze Game — Etapa 1 MVP"""
+"""Terminal Maze Game — Etapa 2: Levels"""
 import curses
 import time
 import random
@@ -43,6 +43,16 @@ def is_solvable(grid, start, goal):
                 visited.add((nx, ny))
                 q.append((nx, ny))
     return False
+
+
+# Level configs: (cols, rows)  — must be odd
+LEVELS = [
+    (21, 11),
+    (31, 15),
+    (41, 19),
+    (51, 21),
+    (61, 23),
+]
 
 
 def make_level(cols=21, rows=11):
@@ -106,17 +116,43 @@ def draw(stdscr, grid, player, goal, steps, elapsed):
     stdscr.refresh()
 
 
-def win_screen(stdscr, steps, elapsed):
+def level_complete_screen(stdscr, level_num, steps, elapsed):
     stdscr.erase()
     sh, sw = stdscr.getmaxyx()
     msg = [
-        "  ╔══════════════════════════╗  ",
-        "  ║       YOU WIN!           ║  ",
-        f"  ║  Steps : {steps:<6}          ║  ",
-        f"  ║  Time  : {elapsed:.1f}s           ║  ",
-        "  ║                          ║  ",
-        "  ║  Press any key to exit   ║  ",
-        "  ╚══════════════════════════╝  ",
+        "  ╔══════════════════════════════╗  ",
+        f"  ║   Level {level_num} complete!          ║  ",
+        f"  ║   Steps  : {steps:<6}             ║  ",
+        f"  ║   Time   : {elapsed:.1f}s              ║  ",
+        "  ║                              ║  ",
+        "  ║   Press any key to continue  ║  ",
+        "  ╚══════════════════════════════╝  ",
+    ]
+    y = max(0, sh // 2 - len(msg) // 2)
+    for i, line in enumerate(msg):
+        x = max(0, sw // 2 - len(line) // 2)
+        try:
+            stdscr.addstr(y + i, x, line, curses.color_pair(4) | curses.A_BOLD)
+        except curses.error:
+            pass
+    stdscr.refresh()
+    stdscr.nodelay(False)
+    stdscr.getch()
+    stdscr.nodelay(True)
+    stdscr.timeout(100)
+
+
+def win_screen(stdscr, total_steps, total_time):
+    stdscr.erase()
+    sh, sw = stdscr.getmaxyx()
+    msg = [
+        "  ╔══════════════════════════════╗  ",
+        "  ║        YOU WIN!              ║  ",
+        f"  ║  Total steps : {total_steps:<6}        ║  ",
+        f"  ║  Total time  : {total_time:.1f}s          ║  ",
+        "  ║                              ║  ",
+        "  ║  Press any key to exit       ║  ",
+        "  ╚══════════════════════════════╝  ",
     ]
     y = max(0, sh // 2 - len(msg) // 2)
     for i, line in enumerate(msg):
@@ -132,32 +168,22 @@ def win_screen(stdscr, steps, elapsed):
 
 # ── Main loop ─────────────────────────────────────────────────────────────────
 
-def main(stdscr):
-    curses.curs_set(0)
-    stdscr.nodelay(True)
-    stdscr.timeout(100)
-
-    curses.start_color()
-    curses.use_default_colors()
-    curses.init_pair(1, curses.COLOR_WHITE,   -1)  # wall
-    curses.init_pair(2, curses.COLOR_BLACK,   curses.COLOR_WHITE)  # HUD
-    curses.init_pair(3, curses.COLOR_GREEN,   -1)  # player
-    curses.init_pair(4, curses.COLOR_YELLOW,  -1)  # goal
-
-    grid, player, goal = make_level(21, 11)
+def run_level(stdscr, level_idx):
+    """Run one level; return (steps, elapsed) or None if player quit."""
+    cols, rows = LEVELS[level_idx]
+    grid, player, goal = make_level(cols, rows)
     steps = 0
     start_time = time.time()
 
     while True:
         elapsed = time.time() - start_time
         draw(stdscr, grid, player, goal, steps, elapsed)
-
         key = stdscr.getch()
 
         if key == curses.KEY_RESIZE:
             continue
         if key in (ord('q'), ord('Q')):
-            break
+            return None
 
         dx, dy = 0, 0
         if key in (curses.KEY_UP,    ord('w'), ord('W')): dy = -1
@@ -173,8 +199,35 @@ def main(stdscr):
 
         if player == goal:
             elapsed = time.time() - start_time
-            win_screen(stdscr, steps, elapsed)
-            break
+            return steps, elapsed
+
+
+def main(stdscr):
+    curses.curs_set(0)
+    stdscr.nodelay(True)
+    stdscr.timeout(100)
+
+    curses.start_color()
+    curses.use_default_colors()
+    curses.init_pair(1, curses.COLOR_WHITE,   -1)
+    curses.init_pair(2, curses.COLOR_BLACK,   curses.COLOR_WHITE)
+    curses.init_pair(3, curses.COLOR_GREEN,   -1)
+    curses.init_pair(4, curses.COLOR_YELLOW,  -1)
+
+    total_steps = 0
+    total_time  = 0.0
+
+    for i in range(len(LEVELS)):
+        result = run_level(stdscr, i)
+        if result is None:
+            return
+        steps, elapsed = result
+        total_steps += steps
+        total_time  += elapsed
+        if i < len(LEVELS) - 1:
+            level_complete_screen(stdscr, i + 1, steps, elapsed)
+
+    win_screen(stdscr, total_steps, total_time)
 
 
 if __name__ == '__main__':
