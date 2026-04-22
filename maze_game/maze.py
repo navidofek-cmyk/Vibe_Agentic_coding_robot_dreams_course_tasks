@@ -1,8 +1,11 @@
-"""Terminal Maze Game — Etapa 3: Keys, Doors, Coins"""
+"""Terminal Maze Game — Etapa 4: Leaderboard"""
 import curses
 import time
 import random
+import json
+import os
 from collections import deque
+from datetime import datetime
 
 
 # ── Maze generation (Recursive Backtracker / DFS) ────────────────────────────
@@ -54,9 +57,10 @@ LEVELS = [
     (61, 23),
 ]
 
+SCORES_FILE = os.path.join(os.path.dirname(__file__), 'scores.json')
+
 
 def passable_cells(grid):
-    """Return list of all passable (non-wall) cell coords."""
     cells = []
     for gy in range(len(grid)):
         for gx in range(len(grid[0])):
@@ -66,7 +70,6 @@ def passable_cells(grid):
 
 
 def place_items(grid, start, goal, n_keys, n_coins):
-    """Place keys and coins on random passable cells (not start/goal)."""
     available = [c for c in passable_cells(grid) if c != start and c != goal]
     random.shuffle(available)
     keys  = set(available[:n_keys])
@@ -75,7 +78,6 @@ def place_items(grid, start, goal, n_keys, n_coins):
 
 
 def make_level(cols=21, rows=11):
-    """Generate a guaranteed-solvable maze; place player and goal."""
     while True:
         grid = generate_maze(cols, rows)
         start = (1, 1)
@@ -86,6 +88,54 @@ def make_level(cols=21, rows=11):
             return grid, start, goal
 
 
+# ── Leaderboard ───────────────────────────────────────────────────────────────
+
+def load_scores():
+    try:
+        with open(SCORES_FILE) as f:
+            return json.load(f)
+    except (FileNotFoundError, json.JSONDecodeError):
+        return []
+
+
+def save_score(name, score, total_time):
+    scores = load_scores()
+    scores.append({
+        'name':  name,
+        'score': score,
+        'time':  round(total_time, 1),
+        'date':  datetime.now().strftime('%Y-%m-%d %H:%M'),
+    })
+    scores.sort(key=lambda e: e['score'])
+    scores = scores[:10]
+    with open(SCORES_FILE, 'w') as f:
+        json.dump(scores, f, indent=2)
+    return scores
+
+
+def ask_name(stdscr):
+    """Ask player for their name; return string."""
+    sh, sw = stdscr.getmaxyx()
+    prompt = " Enter your name: "
+    stdscr.nodelay(False)
+    curses.echo()
+    curses.curs_set(1)
+    y = sh // 2
+    x = max(0, sw // 2 - len(prompt) // 2)
+    stdscr.erase()
+    try:
+        stdscr.addstr(y, x, prompt, curses.color_pair(2) | curses.A_BOLD)
+        stdscr.refresh()
+        name = stdscr.getstr(y, x + len(prompt), 20).decode('utf-8').strip()
+    except curses.error:
+        name = "Anonymous"
+    curses.noecho()
+    curses.curs_set(0)
+    stdscr.nodelay(True)
+    stdscr.timeout(100)
+    return name or "Anonymous"
+
+
 # ── Rendering ─────────────────────────────────────────────────────────────────
 
 WALL   = '█'
@@ -94,12 +144,12 @@ GOAL   = 'X'
 KEY_CH  = 'k'
 COIN_CH = '•'
 
+
 def draw(stdscr, grid, player, goal, steps, elapsed, keys, coins, keys_held):
     stdscr.erase()
     rows, cols = len(grid), len(grid[0])
     sh, sw = stdscr.getmaxyx()
 
-    # HUD
     hud = (f" Steps: {steps}  Time: {elapsed:.0f}s"
            f"  Keys: {keys_held}/{keys_held + len(keys)}"
            f"  Coins: {coins}  WASD=move Q=quit ")
@@ -108,7 +158,6 @@ def draw(stdscr, grid, player, goal, steps, elapsed, keys, coins, keys_held):
     except curses.error:
         pass
 
-    # Maze
     for gy in range(rows):
         for gx in range(cols):
             sy = gy + 1
@@ -120,24 +169,19 @@ def draw(stdscr, grid, player, goal, steps, elapsed, keys, coins, keys_held):
                 if pos == player:
                     stdscr.addstr(sy, sx, PLAYER + ' ', curses.color_pair(3))
                 elif pos == goal:
-                    attr = curses.color_pair(4)
-                    stdscr.addstr(sy, sx, GOAL + ' ', attr)
+                    stdscr.addstr(sy, sx, GOAL + ' ', curses.color_pair(4))
                 elif pos in keys:
                     stdscr.addstr(sy, sx, KEY_CH + ' ', curses.color_pair(5))
                 elif pos in coins:
                     stdscr.addstr(sy, sx, COIN_CH + ' ', curses.color_pair(6))
                 elif grid[gy][gx] == '#':
                     stdscr.addstr(sy, sx, WALL + ' ', curses.color_pair(1))
+                else:
+                    stdscr.addstr(sy, sx, '  ')
             except curses.error:
                 pass
-            else:
-                try:
-                    stdscr.addstr(sy, sx, '  ')
-                except curses.error:
-                    pass
 
     stdscr.refresh()
-
 
 
 def level_complete_screen(stdscr, level_num, steps, elapsed):
@@ -166,23 +210,32 @@ def level_complete_screen(stdscr, level_num, steps, elapsed):
     stdscr.timeout(100)
 
 
-def win_screen(stdscr, total_steps, total_time):
+def win_screen(stdscr, name, score, total_time, scores):
     stdscr.erase()
     sh, sw = stdscr.getmaxyx()
-    msg = [
-        "  ╔══════════════════════════════╗  ",
-        "  ║        YOU WIN!              ║  ",
-        f"  ║  Total steps : {total_steps:<6}        ║  ",
-        f"  ║  Total time  : {total_time:.1f}s          ║  ",
-        "  ║                              ║  ",
-        "  ║  Press any key to exit       ║  ",
-        "  ╚══════════════════════════════╝  ",
+
+    lines = [
+        "  ╔════════════════════════════════════╗  ",
+        "  ║           YOU WIN!                 ║  ",
+        f"  ║  {name:<10}  Score: {score:<6}  Time: {total_time:.0f}s  ║  ",
+        "  ╠════════════════════════════════════╣  ",
+        "  ║           LEADERBOARD              ║  ",
     ]
-    y = max(0, sh // 2 - len(msg) // 2)
-    for i, line in enumerate(msg):
+    for rank, e in enumerate(scores[:5], 1):
+        row = f"  ║  {rank}. {e['name']:<10} {e['score']:<6}  {e['date']}  ║  "
+        lines.append(row)
+    lines += [
+        "  ║                                    ║  ",
+        "  ║    Press any key to exit           ║  ",
+        "  ╚════════════════════════════════════╝  ",
+    ]
+
+    y = max(0, sh // 2 - len(lines) // 2)
+    for i, line in enumerate(lines):
         x = max(0, sw // 2 - len(line) // 2)
+        pair = curses.color_pair(3) if i == 4 else curses.color_pair(4)
         try:
-            stdscr.addstr(y + i, x, line, curses.color_pair(4) | curses.A_BOLD)
+            stdscr.addstr(y + i, x, line, pair | curses.A_BOLD)
         except curses.error:
             pass
     stdscr.refresh()
@@ -193,13 +246,12 @@ def win_screen(stdscr, total_steps, total_time):
 # ── Main loop ─────────────────────────────────────────────────────────────────
 
 def run_level(stdscr, level_idx):
-    """Run one level; return (steps, elapsed, coins_collected) or None if quit."""
     cols, rows = LEVELS[level_idx]
     grid, player, goal = make_level(cols, rows)
     n_keys  = min(2 + level_idx, 4)
     n_coins = 4 + level_idx * 2
     remaining_keys, remaining_coins = place_items(grid, player, goal, n_keys, n_coins)
-    keys_held     = 0
+    keys_held       = 0
     coins_collected = 0
     steps = 0
     start_time = time.time()
@@ -250,12 +302,14 @@ def main(stdscr):
     curses.init_pair(2, curses.COLOR_BLACK,   curses.COLOR_WHITE)
     curses.init_pair(3, curses.COLOR_GREEN,   -1)
     curses.init_pair(4, curses.COLOR_YELLOW,  -1)
-    curses.init_pair(5, curses.COLOR_CYAN,    -1)  # key
-    curses.init_pair(6, curses.COLOR_MAGENTA, -1)  # coin
+    curses.init_pair(5, curses.COLOR_CYAN,    -1)
+    curses.init_pair(6, curses.COLOR_MAGENTA, -1)
 
-    total_steps  = 0
-    total_time   = 0.0
-    total_coins  = 0
+    name = ask_name(stdscr)
+
+    total_steps = 0
+    total_time  = 0.0
+    total_coins = 0
 
     for i in range(len(LEVELS)):
         result = run_level(stdscr, i)
@@ -268,8 +322,9 @@ def main(stdscr):
         if i < len(LEVELS) - 1:
             level_complete_screen(stdscr, i + 1, steps, elapsed)
 
-    score = total_steps - total_coins * 10
-    win_screen(stdscr, score, total_time)
+    score  = total_steps - total_coins * 10
+    scores = save_score(name, score, total_time)
+    win_screen(stdscr, name, score, total_time, scores)
 
 
 if __name__ == '__main__':
