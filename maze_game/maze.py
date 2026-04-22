@@ -1,4 +1,4 @@
-"""Terminal Maze Game — Etapa 4: Leaderboard"""
+"""Terminal Maze Game — Etapa 5: Speed boost & fog of war"""
 import curses
 import time
 import random
@@ -6,6 +6,10 @@ import json
 import os
 from collections import deque
 from datetime import datetime
+
+# Etapa 5 přidává:
+#   - Speed boost powerup '>' — na 5 sekund se hráč pohybuje 2x rychleji
+#   - Fog of war — hráč vidí jen okolí 5 buněk
 
 
 # ── Maze generation (Recursive Backtracker / DFS) ────────────────────────────
@@ -88,6 +92,13 @@ def make_level(cols=21, rows=11):
             return grid, start, goal
 
 
+def place_boosts(grid, start, goal, n_boosts):
+    """Place speed boost powerups '>' on random passable cells."""
+    available = [c for c in passable_cells(grid) if c != start and c != goal]
+    random.shuffle(available)
+    return set(available[:n_boosts])
+
+
 # ── Leaderboard ───────────────────────────────────────────────────────────────
 
 def load_scores():
@@ -138,21 +149,25 @@ def ask_name(stdscr):
 
 # ── Rendering ─────────────────────────────────────────────────────────────────
 
-WALL   = '█'
-PLAYER = '@'
-GOAL   = 'X'
-KEY_CH  = 'k'
-COIN_CH = '•'
+WALL      = '█'
+PLAYER    = '@'
+GOAL      = 'X'
+KEY_CH    = 'k'
+COIN_CH   = '•'
+BOOST_CH  = '>'
+FOG_RADIUS = 5
 
 
-def draw(stdscr, grid, player, goal, steps, elapsed, keys, coins, keys_held):
+def draw(stdscr, grid, player, goal, steps, elapsed, keys, coins, keys_held,
+         boosts=None, boost_active=False, boost_ends=0):
     stdscr.erase()
     rows, cols = len(grid), len(grid[0])
     sh, sw = stdscr.getmaxyx()
 
+    boost_str = f"  BOOST {max(0, boost_ends - elapsed):.0f}s" if boost_active else ""
     hud = (f" Steps: {steps}  Time: {elapsed:.0f}s"
            f"  Keys: {keys_held}/{keys_held + len(keys)}"
-           f"  Coins: {coins}  WASD=move Q=quit ")
+           f"  Coins: {coins}{boost_str}  WASD=move Q=quit ")
     try:
         stdscr.addstr(0, 0, hud[:sw - 1], curses.color_pair(2))
     except curses.error:
@@ -165,15 +180,21 @@ def draw(stdscr, grid, player, goal, steps, elapsed, keys, coins, keys_held):
             if sy >= sh or sx + 1 >= sw:
                 continue
             pos = (gx, gy)
+            dist = abs(gx - player[0]) + abs(gy - player[1])
+            in_fog = dist > FOG_RADIUS
             try:
                 if pos == player:
                     stdscr.addstr(sy, sx, PLAYER + ' ', curses.color_pair(3))
+                elif in_fog:
+                    stdscr.addstr(sy, sx, '  ')
                 elif pos == goal:
                     stdscr.addstr(sy, sx, GOAL + ' ', curses.color_pair(4))
                 elif pos in keys:
                     stdscr.addstr(sy, sx, KEY_CH + ' ', curses.color_pair(5))
                 elif pos in coins:
                     stdscr.addstr(sy, sx, COIN_CH + ' ', curses.color_pair(6))
+                elif boosts and pos in boosts:
+                    stdscr.addstr(sy, sx, BOOST_CH + ' ', curses.color_pair(7))
                 elif grid[gy][gx] == '#':
                     stdscr.addstr(sy, sx, WALL + ' ', curses.color_pair(1))
                 else:
@@ -251,15 +272,23 @@ def run_level(stdscr, level_idx):
     n_keys  = min(2 + level_idx, 4)
     n_coins = 4 + level_idx * 2
     remaining_keys, remaining_coins = place_items(grid, player, goal, n_keys, n_coins)
+    remaining_boosts = place_boosts(grid, player, goal, 2)
     keys_held       = 0
     coins_collected = 0
+    boost_active    = False
+    boost_ends      = 0.0
     steps = 0
     start_time = time.time()
 
     while True:
-        elapsed = time.time() - start_time
+        now = time.time()
+        elapsed = now - start_time
+        if boost_active and now >= boost_ends:
+            boost_active = False
+
         draw(stdscr, grid, player, goal, steps, elapsed,
-             remaining_keys, remaining_coins, keys_held)
+             remaining_keys, remaining_coins, keys_held,
+             remaining_boosts, boost_active, boost_ends - start_time)
         key = stdscr.getch()
 
         if key == curses.KEY_RESIZE:
@@ -274,17 +303,23 @@ def run_level(stdscr, level_idx):
         elif key in (curses.KEY_RIGHT, ord('d'), ord('D')): dx =  1
 
         if dx or dy:
-            nx, ny = player[0] + dx, player[1] + dy
-            if 0 <= nx < len(grid[0]) and 0 <= ny < len(grid) and grid[ny][nx] != '#':
-                player = (nx, ny)
-                steps += 1
-                pos = (nx, ny)
-                if pos in remaining_keys:
-                    remaining_keys.discard(pos)
-                    keys_held += 1
-                if pos in remaining_coins:
-                    remaining_coins.discard(pos)
-                    coins_collected += 1
+            moves = 2 if boost_active else 1
+            for _ in range(moves):
+                nx, ny = player[0] + dx, player[1] + dy
+                if 0 <= nx < len(grid[0]) and 0 <= ny < len(grid) and grid[ny][nx] != '#':
+                    player = (nx, ny)
+                    steps += 1
+                    pos = (nx, ny)
+                    if pos in remaining_keys:
+                        remaining_keys.discard(pos)
+                        keys_held += 1
+                    if pos in remaining_coins:
+                        remaining_coins.discard(pos)
+                        coins_collected += 1
+                    if pos in remaining_boosts:
+                        remaining_boosts.discard(pos)
+                        boost_active = True
+                        boost_ends   = time.time() + 5.0
 
         if player == goal and not remaining_keys:
             elapsed = time.time() - start_time
@@ -304,6 +339,7 @@ def main(stdscr):
     curses.init_pair(4, curses.COLOR_YELLOW,  -1)
     curses.init_pair(5, curses.COLOR_CYAN,    -1)
     curses.init_pair(6, curses.COLOR_MAGENTA, -1)
+    curses.init_pair(7, curses.COLOR_RED,     -1)  # speed boost
 
     name = ask_name(stdscr)
 
