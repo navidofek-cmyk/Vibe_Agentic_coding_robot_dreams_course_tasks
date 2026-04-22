@@ -1,0 +1,7 @@
+token
+claude/
+__pycache__/
+*.pyc
+*.pyo
+.DS_Store
+scores.json
