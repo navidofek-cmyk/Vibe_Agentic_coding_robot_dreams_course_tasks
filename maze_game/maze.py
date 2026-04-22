@@ -1,4 +1,4 @@
-"""Terminal Maze Game — Etapa 2: Levels"""
+"""Terminal Maze Game — Etapa 3: Keys, Doors, Coins"""
 import curses
 import time
 import random
@@ -55,6 +55,25 @@ LEVELS = [
 ]
 
 
+def passable_cells(grid):
+    """Return list of all passable (non-wall) cell coords."""
+    cells = []
+    for gy in range(len(grid)):
+        for gx in range(len(grid[0])):
+            if grid[gy][gx] == ' ':
+                cells.append((gx, gy))
+    return cells
+
+
+def place_items(grid, start, goal, n_keys, n_coins):
+    """Place keys and coins on random passable cells (not start/goal)."""
+    available = [c for c in passable_cells(grid) if c != start and c != goal]
+    random.shuffle(available)
+    keys  = set(available[:n_keys])
+    coins = set(available[n_keys:n_keys + n_coins])
+    return keys, coins
+
+
 def make_level(cols=21, rows=11):
     """Generate a guaranteed-solvable maze; place player and goal."""
     while True:
@@ -69,17 +88,21 @@ def make_level(cols=21, rows=11):
 
 # ── Rendering ─────────────────────────────────────────────────────────────────
 
-WALL  = '█'
+WALL   = '█'
 PLAYER = '@'
-GOAL  = 'X'
+GOAL   = 'X'
+KEY_CH  = 'k'
+COIN_CH = '•'
 
-def draw(stdscr, grid, player, goal, steps, elapsed):
+def draw(stdscr, grid, player, goal, steps, elapsed, keys, coins, keys_held):
     stdscr.erase()
     rows, cols = len(grid), len(grid[0])
     sh, sw = stdscr.getmaxyx()
 
     # HUD
-    hud = f" Steps: {steps}   Time: {elapsed:.0f}s   WASD/arrows=move  Q=quit "
+    hud = (f" Steps: {steps}  Time: {elapsed:.0f}s"
+           f"  Keys: {keys_held}/{keys_held + len(keys)}"
+           f"  Coins: {coins}  WASD=move Q=quit ")
     try:
         stdscr.addstr(0, 0, hud[:sw - 1], curses.color_pair(2))
     except curses.error:
@@ -89,24 +112,24 @@ def draw(stdscr, grid, player, goal, steps, elapsed):
     for gy in range(rows):
         for gx in range(cols):
             sy = gy + 1
-            sx = gx * 2        # double width for readability
+            sx = gx * 2
             if sy >= sh or sx + 1 >= sw:
                 continue
-            if (gx, gy) == player:
-                try:
+            pos = (gx, gy)
+            try:
+                if pos == player:
                     stdscr.addstr(sy, sx, PLAYER + ' ', curses.color_pair(3))
-                except curses.error:
-                    pass
-            elif (gx, gy) == goal:
-                try:
-                    stdscr.addstr(sy, sx, GOAL + ' ', curses.color_pair(4))
-                except curses.error:
-                    pass
-            elif grid[gy][gx] == '#':
-                try:
+                elif pos == goal:
+                    attr = curses.color_pair(4)
+                    stdscr.addstr(sy, sx, GOAL + ' ', attr)
+                elif pos in keys:
+                    stdscr.addstr(sy, sx, KEY_CH + ' ', curses.color_pair(5))
+                elif pos in coins:
+                    stdscr.addstr(sy, sx, COIN_CH + ' ', curses.color_pair(6))
+                elif grid[gy][gx] == '#':
                     stdscr.addstr(sy, sx, WALL + ' ', curses.color_pair(1))
-                except curses.error:
-                    pass
+            except curses.error:
+                pass
             else:
                 try:
                     stdscr.addstr(sy, sx, '  ')
@@ -114,6 +137,7 @@ def draw(stdscr, grid, player, goal, steps, elapsed):
                     pass
 
     stdscr.refresh()
+
 
 
 def level_complete_screen(stdscr, level_num, steps, elapsed):
@@ -169,15 +193,21 @@ def win_screen(stdscr, total_steps, total_time):
 # ── Main loop ─────────────────────────────────────────────────────────────────
 
 def run_level(stdscr, level_idx):
-    """Run one level; return (steps, elapsed) or None if player quit."""
+    """Run one level; return (steps, elapsed, coins_collected) or None if quit."""
     cols, rows = LEVELS[level_idx]
     grid, player, goal = make_level(cols, rows)
+    n_keys  = min(2 + level_idx, 4)
+    n_coins = 4 + level_idx * 2
+    remaining_keys, remaining_coins = place_items(grid, player, goal, n_keys, n_coins)
+    keys_held     = 0
+    coins_collected = 0
     steps = 0
     start_time = time.time()
 
     while True:
         elapsed = time.time() - start_time
-        draw(stdscr, grid, player, goal, steps, elapsed)
+        draw(stdscr, grid, player, goal, steps, elapsed,
+             remaining_keys, remaining_coins, keys_held)
         key = stdscr.getch()
 
         if key == curses.KEY_RESIZE:
@@ -196,10 +226,17 @@ def run_level(stdscr, level_idx):
             if 0 <= nx < len(grid[0]) and 0 <= ny < len(grid) and grid[ny][nx] != '#':
                 player = (nx, ny)
                 steps += 1
+                pos = (nx, ny)
+                if pos in remaining_keys:
+                    remaining_keys.discard(pos)
+                    keys_held += 1
+                if pos in remaining_coins:
+                    remaining_coins.discard(pos)
+                    coins_collected += 1
 
-        if player == goal:
+        if player == goal and not remaining_keys:
             elapsed = time.time() - start_time
-            return steps, elapsed
+            return steps, elapsed, coins_collected
 
 
 def main(stdscr):
@@ -213,21 +250,26 @@ def main(stdscr):
     curses.init_pair(2, curses.COLOR_BLACK,   curses.COLOR_WHITE)
     curses.init_pair(3, curses.COLOR_GREEN,   -1)
     curses.init_pair(4, curses.COLOR_YELLOW,  -1)
+    curses.init_pair(5, curses.COLOR_CYAN,    -1)  # key
+    curses.init_pair(6, curses.COLOR_MAGENTA, -1)  # coin
 
-    total_steps = 0
-    total_time  = 0.0
+    total_steps  = 0
+    total_time   = 0.0
+    total_coins  = 0
 
     for i in range(len(LEVELS)):
         result = run_level(stdscr, i)
         if result is None:
             return
-        steps, elapsed = result
+        steps, elapsed, coins = result
         total_steps += steps
         total_time  += elapsed
+        total_coins += coins
         if i < len(LEVELS) - 1:
             level_complete_screen(stdscr, i + 1, steps, elapsed)
 
-    win_screen(stdscr, total_steps, total_time)
+    score = total_steps - total_coins * 10
+    win_screen(stdscr, score, total_time)
 
 
 if __name__ == '__main__':
