@@ -333,27 +333,27 @@ void Editor::render() {
 
             // render one pane line by absolute index
             auto renderLine = [&](Buffer* b, int lineIdx, int col, int cols, int side) {
+                if (cols <= 0) return;
                 out += "\033[" + std::to_string(r + 2) + ";" + std::to_string(col) + "H";
-                if (!b || cols <= 0) return;
+                if (!b) { out += std::string(cols, ' '); return; }
                 if (lineIdx < 0) {
-                    // blank line (absent in this pane) — dim bg
                     out += "\033[48;5;236m" + std::string(cols, ' ') + "\033[0m";
                     return;
                 }
                 const auto& lines = b->lines();
-                if (isDiff) out += (side == 0) ? "\033[48;5;22m" : "\033[48;5;52m";
-                if (lineIdx < (int)lines.size()) {
-                    const std::string& line = lines[lineIdx];
-                    auto* hl = b->highlighter();
-                    if (hl) {
-                        auto spans = hl->highlight(line, lineIdx);
-                        out += renderHighlighted(line, spans, 0, cols);
-                    } else {
-                        std::string vis = line.size() > (size_t)cols ? line.substr(0, cols) : line;
-                        out += vis + std::string(cols - (int)vis.size(), ' ');
-                    }
-                } else {
+                if (lineIdx >= (int)lines.size()) {
                     out += std::string(cols, ' ');
+                    return;
+                }
+                if (isDiff) out += (side == 0) ? "\033[48;5;22m" : "\033[48;5;52m";
+                const std::string& line = lines[lineIdx];
+                auto* hl = b->highlighter();
+                if (hl) {
+                    auto spans = hl->highlight(line, lineIdx);
+                    out += renderHighlighted(line, spans, 0, cols);
+                } else {
+                    int visLen = std::min((int)line.size(), cols);
+                    out += line.substr(0, visLen) + std::string(cols - visLen, ' ');
                 }
                 if (isDiff) out += "\033[0m";
             };
@@ -1508,8 +1508,8 @@ void Editor::recomputeSplitDiff() {
     const auto& B = rb->lines();
     int m = (int)A.size(), n = (int)B.size();
 
-    // LCS DP — limit to 800 lines for performance
-    int M = std::min(m, 800), N = std::min(n, 800);
+    // LCS DP — limit to 500 lines for performance
+    int M = std::min(m, 500), N = std::min(n, 500);
     std::vector<std::vector<int>> dp(M + 1, std::vector<int>(N + 1, 0));
     for (int i = 1; i <= M; i++)
         for (int j = 1; j <= N; j++)
