@@ -1,5 +1,5 @@
 token
-claude/
+claude/git-aware-nano/build/
 api.py
 hw_01/api.py
 .venv/
