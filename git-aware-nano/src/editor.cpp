@@ -306,17 +306,34 @@ void Editor::render() {
             const std::string* ldiff = (lline != rline) ? &rline : nullptr;
             const std::string* rdiff = (lline != rline) ? &lline : nullptr;
 
+            // line number helper
+            int lnw = lineNumWidth();
+            auto renderLN = [&](Buffer* b, int col) {
+                if (!b || lnw <= 0) return;
+                out += "\033[" + std::to_string(r + 2) + ";" + std::to_string(col) + "H";
+                int li = b->scrollRow() + r;
+                if (li < (int)b->lines().size()) {
+                    std::string ln = std::to_string(li + 1);
+                    while ((int)ln.size() < lnw - 1) ln = " " + ln;
+                    out += "\033[90m" + ln + " \033[0m";
+                } else {
+                    out += std::string(lnw, ' ');
+                }
+            };
+
             // left pane
-            out += "\033[" + std::to_string(r + 2) + ";" + std::to_string(baseCol) + "H";
-            renderOnePaneLines(out, lb, baseCol, leftCols, r, ldiff);
+            renderLN(lb, baseCol);
+            out += "\033[" + std::to_string(r + 2) + ";" + std::to_string(baseCol + lnw) + "H";
+            renderOnePaneLines(out, lb, baseCol + lnw, leftCols - lnw, r, ldiff);
 
             // separator — active pane gets bright color
             out += "\033[" + std::to_string(r + 2) + ";" + std::to_string(sepCol) + "H";
             out += (splitFocus_ == 0 ? "\033[97m│\033[0m" : "\033[90m│\033[0m");
 
             // right pane
-            out += "\033[" + std::to_string(r + 2) + ";" + std::to_string(rightCol) + "H";
-            renderOnePaneLines(out, rb, rightCol, rightCols, r, rdiff);
+            renderLN(rb, rightCol);
+            out += "\033[" + std::to_string(r + 2) + ";" + std::to_string(rightCol + lnw) + "H";
+            renderOnePaneLines(out, rb, rightCol + lnw, rightCols - lnw, r, rdiff);
             out += "\033[0m";
             continue;
         }
