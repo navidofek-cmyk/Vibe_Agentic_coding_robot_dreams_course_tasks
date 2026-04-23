@@ -1,0 +1,67 @@
+name: CI
+
+on:
+  push:
+    branches: [ main, master ]
+  pull_request:
+    branches: [ main, master ]
+
+jobs:
+  test-maze:
+    name: maze_game tests
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - name: Run maze tests
+        run: python3 maze_game/test_maze.py
+
+  test-gnano:
+    name: gnano tests + ASAN
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Install dependencies
+        run: sudo apt-get install -y g++ make
+
+      - name: Build
+        run: make -C git-aware-nano
+
+      - name: Run tests
+        run: make test -C git-aware-nano
+
+      - name: ASAN — test_buffer
+        working-directory: git-aware-nano
+        run: |
+          g++ -std=c++17 -fsanitize=address,undefined -g -O1 \
+            -fno-stack-protector -Isrc \
+            src/tests/test_buffer.cpp src/buffer.cpp \
+            -o /tmp/test_buffer_asan
+          ASAN_OPTIONS=detect_leaks=1 /tmp/test_buffer_asan
+
+      - name: ASAN — test_markdown
+        working-directory: git-aware-nano
+        run: |
+          g++ -std=c++17 -fsanitize=address,undefined -g -O1 \
+            -fno-stack-protector -Isrc \
+            src/tests/test_markdown.cpp src/markdown_preview.cpp \
+            -o /tmp/test_md_asan
+          ASAN_OPTIONS=detect_leaks=1 /tmp/test_md_asan
+
+      - name: ASAN — test_highlighters
+        working-directory: git-aware-nano
+        run: |
+          g++ -std=c++17 -fsanitize=address,undefined -g -O1 \
+            -fno-stack-protector -Isrc \
+            src/tests/test_highlighters.cpp src/highlighters.cpp \
+            -o /tmp/test_hl_asan
+          ASAN_OPTIONS=detect_leaks=1 /tmp/test_hl_asan
+
+      - name: Benchmark
+        working-directory: git-aware-nano
+        run: |
+          g++ -std=c++17 -O2 -fno-stack-protector -Isrc \
+            src/tests/test_benchmark.cpp \
+            src/highlighters.cpp src/markdown_preview.cpp src/buffer.cpp \
+            -o /tmp/test_bench
+          /tmp/test_bench

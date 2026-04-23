@@ -37,6 +37,18 @@ TEST_MD_SRCS  := $(TEST_DIR)/test_markdown.cpp \
                  $(SRC_DIR)/markdown_preview.cpp
 TEST_MD_BIN   := $(TEST_BUILD)/test_markdown
 
+TEST_PROP_SRCS := $(TEST_DIR)/test_properties.cpp \
+                  $(SRC_DIR)/buffer.cpp \
+                  $(SRC_DIR)/highlighters.cpp \
+                  $(SRC_DIR)/markdown_preview.cpp
+TEST_PROP_BIN  := $(TEST_BUILD)/test_properties
+
+TEST_BENCH_SRCS := $(TEST_DIR)/test_benchmark.cpp \
+                   $(SRC_DIR)/buffer.cpp \
+                   $(SRC_DIR)/highlighters.cpp \
+                   $(SRC_DIR)/markdown_preview.cpp
+TEST_BENCH_BIN  := $(TEST_BUILD)/test_benchmark
+
 .PHONY: all clean run debug test
 
 all: $(TARGET)
@@ -75,7 +87,15 @@ $(TEST_MD_BIN): $(TEST_MD_SRCS)
 	@mkdir -p $(TEST_BUILD)
 	$(CXX) $(CXXFLAGS) -I$(SRC_DIR) $(TEST_MD_SRCS) -o $@
 
-test: $(TEST_HL_BIN) $(TEST_GIT_BIN) $(TEST_BUF_BIN) $(TEST_MD_BIN)
+$(TEST_PROP_BIN): $(TEST_PROP_SRCS)
+	@mkdir -p $(TEST_BUILD)
+	$(CXX) $(CXXFLAGS) -I$(SRC_DIR) $(TEST_PROP_SRCS) -o $@
+
+$(TEST_BENCH_BIN): $(TEST_BENCH_SRCS)
+	@mkdir -p $(TEST_BUILD)
+	$(CXX) $(CXXFLAGS) -I$(SRC_DIR) $(TEST_BENCH_SRCS) -o $@
+
+test: $(TEST_HL_BIN) $(TEST_GIT_BIN) $(TEST_BUF_BIN) $(TEST_MD_BIN) $(TEST_PROP_BIN) $(TEST_BENCH_BIN)
 	@echo "=== test_highlighters ==="
 	@$(TEST_HL_BIN)
 	@echo "=== test_git ==="
@@ -84,6 +104,10 @@ test: $(TEST_HL_BIN) $(TEST_GIT_BIN) $(TEST_BUF_BIN) $(TEST_MD_BIN)
 	@$(TEST_BUF_BIN)
 	@echo "=== test_markdown ==="
 	@$(TEST_MD_BIN)
+	@echo "=== test_properties ==="
+	@$(TEST_PROP_BIN)
+	@echo "=== benchmarks ==="
+	@$(TEST_BENCH_BIN)
 
 clean:
 	rm -rf $(BUILD_DIR)
