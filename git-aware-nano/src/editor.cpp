@@ -473,8 +473,14 @@ void Editor::render() {
     // Position cursor
     if (mode_ == Mode::Edit) {
         if (auto* buf = currentBuffer()) {
-            int cy = buf->cursorRow() - buf->scrollRow() + 2;  // +2: tabbar offset (1-based)
-            int cx = buf->cursorCol() - buf->scrollCol() + editStartCol() + gutterWidth() + 1;
+            int cy = buf->cursorRow() - buf->scrollRow() + 2;
+            int cx;
+            if (splitMode_) {
+                // left pane starts at editStartCol+1, width=(editCols-1)/2
+                cx = buf->cursorCol() - buf->scrollCol() + editStartCol() + 1;
+            } else {
+                cx = buf->cursorCol() - buf->scrollCol() + editStartCol() + gutterWidth() + 1;
+            }
             out += "\033[" + std::to_string(cy) + ";" + std::to_string(cx) + "H";
             out += "\033[?25h";  // show cursor
         }
@@ -596,7 +602,10 @@ void Editor::handleEditKey(int key) {
                 buf->insertChar((char)key);
             break;
     }
-    if (buf) buf->updateScroll(editRows(), editCols());
+    if (buf) {
+        int cols = splitMode_ ? (editCols() - 1) / 2 : editCols();
+        buf->updateScroll(editRows(), cols);
+    }
 }
 
 void Editor::handlePanelKey(int key) {
