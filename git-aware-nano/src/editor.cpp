@@ -294,24 +294,27 @@ void Editor::render() {
             int sepCol    = baseCol + leftCols;
             int rightCol  = sepCol + 1;
 
+            // row 0 is header; content starts at r=1 → buffer row r-1
+            int contentRow = r - 1;
+
             // compute diff lines for highlight
             auto getLine = [](Buffer* b, int row) -> std::string {
-                if (!b) return "";
+                if (!b || row < 0) return "";
                 int idx = b->scrollRow() + row;
                 const auto& ls = b->lines();
                 return (idx < (int)ls.size()) ? ls[idx] : "";
             };
-            std::string lline = getLine(lb, r);
-            std::string rline = getLine(rb, r);
+            std::string lline = getLine(lb, contentRow);
+            std::string rline = getLine(rb, contentRow);
             const std::string* ldiff = (lline != rline) ? &rline : nullptr;
             const std::string* rdiff = (lline != rline) ? &lline : nullptr;
 
             // line number helper
             int lnw = lineNumWidth();
             auto renderLN = [&](Buffer* b, int col) {
-                if (!b || lnw <= 0) return;
+                if (!b || lnw <= 0 || contentRow < 0) return;
                 out += "\033[" + std::to_string(r + 2) + ";" + std::to_string(col) + "H";
-                int li = b->scrollRow() + r;
+                int li = b->scrollRow() + contentRow;
                 if (li < (int)b->lines().size()) {
                     std::string ln = std::to_string(li + 1);
                     while ((int)ln.size() < lnw - 1) ln = " " + ln;
@@ -321,10 +324,30 @@ void Editor::render() {
                 }
             };
 
+            // row 0 = legend header
+            if (r == 0) {
+                std::string lname = lb ? lb->displayName() : "?";
+                std::string rname = rb ? rb->displayName() : "?";
+                // left header: green bg
+                out += "\033[" + std::to_string(r + 2) + ";" + std::to_string(baseCol) + "H";
+                std::string lhdr = " \033[1mNEW\033[0m\033[42m\033[30m " + lname + " (HEAD)";
+                out += "\033[42m\033[30m" + lhdr;
+                out += std::string(std::max(0, leftCols - (int)lname.size() - 10), ' ') + "\033[0m";
+                // separator
+                out += "\033[" + std::to_string(r + 2) + ";" + std::to_string(sepCol) + "H";
+                out += "\033[97m│\033[0m";
+                // right header: red bg
+                out += "\033[" + std::to_string(r + 2) + ";" + std::to_string(rightCol) + "H";
+                std::string rhdr = " \033[1mOLD\033[0m\033[41m\033[97m " + rname;
+                out += "\033[41m\033[97m" + rhdr;
+                out += std::string(std::max(0, rightCols - (int)rname.size() - 6), ' ') + "\033[0m";
+                continue;
+            }
+
             // left pane
             renderLN(lb, baseCol);
             out += "\033[" + std::to_string(r + 2) + ";" + std::to_string(baseCol + lnw) + "H";
-            renderOnePaneLines(out, lb, baseCol + lnw, leftCols - lnw, r, ldiff);
+            renderOnePaneLines(out, lb, baseCol + lnw, leftCols - lnw, r - 1, ldiff, 0);
 
             // separator — active pane gets bright color
             out += "\033[" + std::to_string(r + 2) + ";" + std::to_string(sepCol) + "H";
@@ -333,7 +356,7 @@ void Editor::render() {
             // right pane
             renderLN(rb, rightCol);
             out += "\033[" + std::to_string(r + 2) + ";" + std::to_string(rightCol + lnw) + "H";
-            renderOnePaneLines(out, rb, rightCol + lnw, rightCols - lnw, r, rdiff);
+            renderOnePaneLines(out, rb, rightCol + lnw, rightCols - lnw, r - 1, rdiff, 1);
             out += "\033[0m";
             continue;
         }
@@ -1472,10 +1495,9 @@ void Editor::disableSplit() {
     splitFocus_ = 0;
 }
 
-// Render one line of a buffer; if `diffLine` is non-null and differs, use diff bg.
 void Editor::renderOnePaneLines(std::string& out, Buffer* buf,
                                  int startCol1, int cols, int row,
-                                 const std::string* diffLine) {
+                                 const std::string* diffLine, int side) {
     if (!buf || cols <= 0) {
         if (cols > 0) out += std::string(cols, ' ');
         return;
@@ -1499,8 +1521,8 @@ void Editor::renderOnePaneLines(std::string& out, Buffer* buf,
         isAdded = true;
 
     if (isDiff || isAdded) {
-        // dark yellow bg for changed, dark green bg for unique lines
-        out += isAdded ? "\033[48;5;22m" : "\033[48;5;52m";
+        // left(new): green bg   right(old): red bg
+        out += (side == 0) ? "\033[48;5;22m" : "\033[48;5;52m";
     }
 
     if (lineIdx < (int)lines.size()) {
