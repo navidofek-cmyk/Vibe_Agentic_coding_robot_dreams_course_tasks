@@ -197,6 +197,21 @@ void Editor::render() {
             previewLines.push_back(std::string(editCols(), ' '));
     }
 
+    // --- Split mode: synchronize scroll ---
+    if (splitMode_ && splitBuf_ >= 0 && splitBuf_ < (int)buffers_.size()) {
+        Buffer* lb = currentBuffer();
+        Buffer* rb = buffers_[splitBuf_].get();
+        if (splitSync_ && lb && rb) {
+            if (splitFocus_ == 0)
+                rb->updateScroll(editRows(), (editCols() - 1) / 2);
+            // mirror scroll row
+            int sr = (splitFocus_ == 0 ? lb : rb)->scrollRow();
+            (splitFocus_ == 0 ? rb : lb)->gotoLine(sr + editRows() / 2,
+                (splitFocus_ == 0 ? rb : lb)->cursorCol());
+            (splitFocus_ == 0 ? rb : lb)->updateScroll(editRows(), (editCols() - 1) / 2);
+        }
+    }
+
     // --- Panel + Edit area (rows 1 .. termRows-2) ---
     for (int r = 0; r < editRows(); ++r) {
         // Position at start of this row
@@ -262,6 +277,35 @@ void Editor::render() {
             // Separator
             out += "\033[" + std::to_string(r + 2) + ";" + std::to_string(kPanelWidth + 1) + "H";
             out += "\033[90m\342\224\202\033[0m";  // │ in dark gray
+        }
+
+        // ── Split mode render ──────────────────────────────────────────
+        if (splitMode_ && splitBuf_ >= 0 && splitBuf_ < (int)buffers_.size()) {
+            Buffer* lb = buffers_[currentBuf_].get();
+            Buffer* rb = buffers_[splitBuf_].get();
+            int totalCols = editCols();
+            int leftCols  = (totalCols - 1) / 2;
+            int rightCols = totalCols - leftCols - 1;
+            int baseCol   = editStartCol() + 1;   // 1-based
+            int sepCol    = baseCol + leftCols;
+            int rightCol  = sepCol + 1;
+
+            // left pane
+            out += "\033[" + std::to_string(r + 2) + ";" + std::to_string(baseCol) + "H";
+            if (splitFocus_ == 0) out += "\033[0m"; else out += "\033[2m";
+            renderOnePaneLines(out, lb, baseCol, leftCols, r);
+            out += "\033[0m";
+
+            // separator
+            out += "\033[" + std::to_string(r + 2) + ";" + std::to_string(sepCol) + "H";
+            out += "\033[90m│\033[0m";
+
+            // right pane
+            out += "\033[" + std::to_string(r + 2) + ";" + std::to_string(rightCol) + "H";
+            if (splitFocus_ == 1) out += "\033[0m"; else out += "\033[2m";
+            renderOnePaneLines(out, rb, rightCol, rightCols, r);
+            out += "\033[0m";
+            continue;
         }
 
         // Edit area — gutter first
@@ -508,6 +552,32 @@ void Editor::handleEditKey(int key) {
         case Key::CTRL_P:      startFuzzyFinder();   break;
         case Key::CTRL_T:      startGrepSearch();    break;
         case Key::CTRL_G:      gitPrefixActive_ = true; setStatus("Git: B=blame D=diff L=log H=history T=tree C=branch S=stage R=refresh"); return;
+        case Key::CTRL_B:
+            if (splitMode_) {
+                disableSplit();
+                setStatus("Split off");
+            } else if (buffers_.size() >= 2) {
+                int other = (currentBuf_ == 0) ? 1 : 0;
+                enableSplit(other);
+                setStatus("Split on — Tab=switch focus  ^B=close");
+            } else {
+                setStatus("Need 2 open buffers for split");
+            }
+            return;
+        case '\t':
+            if (splitMode_) {
+                splitFocus_ = 1 - splitFocus_;
+                if (splitFocus_ == 1) {
+                    // move edit focus to right pane
+                    std::swap(currentBuf_, splitBuf_);
+                    splitFocus_ = 0;  // left is always "active" buffer
+                } else {
+                    std::swap(currentBuf_, splitBuf_);
+                    splitFocus_ = 1;
+                }
+                setStatus(splitFocus_ == 0 ? "Focus: left" : "Focus: right");
+            }
+            return;
         case Key::CTRL_V:
             if (buf) {
                 buf->togglePreview();
@@ -1038,7 +1108,7 @@ void Editor::handleGitOverlayKey(int key) {
                     }
 
                 } else if (gitOverlayKind_ == GitOverlayKind::TreeView) {
-                    // Enter = open file at that commit
+                    // Enter = open old version in split view (left=current, right=old)
                     mode_ = Mode::Edit;
                     std::string filepath = gitOverlayData_[gitOverlaySelected_];
                     std::string content  = git::fileAtCommit(repoInfo_.root, gitTreeHash_, filepath);
@@ -1049,10 +1119,12 @@ void Editor::handleGitOverlayKey(int key) {
                     dbuf->load(tmpPath);
                     dbuf->setHighlighter(makeHighlighter(filepath));
                     buffers_.push_back(std::move(dbuf));
-                    currentBuf_ = (int)buffers_.size() - 1;
+                    int newIdx = (int)buffers_.size() - 1;
+                    // activate split: current file left, old version right
+                    enableSplit(newIdx);
                     setStatus(fs::path(filepath).filename().string()
                               + " @ " + gitTreeHash_.substr(0, 8)
-                              + "  |  ^G D = diff vs HEAD");
+                              + "  |  Tab=switch  ^B=close split");
                 }
             }
             return;
@@ -1294,4 +1366,51 @@ void Editor::renderFuzzyOverlay(std::string& out) {
             }
         }
     }
+}
+
+// ── Split screen ───────────────────────────────────────────────────────────
+
+void Editor::enableSplit(int rightBufIdx) {
+    splitBuf_   = rightBufIdx;
+    splitMode_  = true;
+    splitFocus_ = 0;
+    splitSync_  = true;
+}
+
+void Editor::disableSplit() {
+    splitMode_ = false;
+    splitBuf_  = -1;
+    splitFocus_ = 0;
+}
+
+// Render one line of a buffer into `out` at given terminal column (1-based),
+// clipped/padded to `cols` visible characters.
+void Editor::renderOnePaneLines(std::string& out, Buffer* buf,
+                                 int startCol1, int cols, int row) {
+    if (!buf || cols <= 0) {
+        if (cols > 0)
+            out += std::string(cols, ' ');
+        return;
+    }
+    const auto& lines = buf->lines();
+    int lineIdx = buf->scrollRow() + row;
+    if (lineIdx < (int)lines.size()) {
+        const std::string& line = lines[lineIdx];
+        auto* hl = buf->highlighter();
+        if (hl) {
+            auto spans = hl->highlight(line, lineIdx);
+            out += renderHighlighted(line, spans, buf->scrollCol(), cols);
+        } else {
+            int sc = buf->scrollCol();
+            std::string visible;
+            if (sc < (int)line.size())
+                visible = line.substr(sc, cols);
+            out += visible;
+            int rem = cols - (int)visible.size();
+            if (rem > 0) out += std::string(rem, ' ');
+        }
+    } else {
+        out += std::string(cols, ' ');
+    }
+    (void)startCol1;
 }

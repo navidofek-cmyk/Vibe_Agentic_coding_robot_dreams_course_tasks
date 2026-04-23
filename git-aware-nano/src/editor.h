@@ -75,6 +75,17 @@ private:
     std::map<std::string, char>      fileGitStatus_;  // rel-to-root → 'M','+'etc
     bool                             gitPrefixActive_ = false;
 
+    // split-screen
+    bool splitMode_   = false;
+    int  splitBuf_    = -1;   // index of right-pane buffer (-1 = off)
+    int  splitFocus_  = 0;    // 0 = left (currentBuf_), 1 = right (splitBuf_)
+    bool splitSync_   = true; // synchronized scroll
+    void enableSplit(int rightBufIdx);
+    void disableSplit();
+    void renderSplitEdit(std::string& out);
+    void renderOnePaneLines(std::string& out, Buffer* buf,
+                            int startCol, int cols, int gutterCol);
+
     // git overlays (branch picker, log, blame, diff)
     GitOverlayKind                   gitOverlayKind_  = GitOverlayKind::BranchPick;
     std::vector<std::string>         gitOverlayLines_; // display lines

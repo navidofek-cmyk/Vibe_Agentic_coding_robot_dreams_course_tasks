@@ -64,4 +64,5 @@ namespace Key {
     constexpr int CTRL_W      = 23;  // whole-word toggle in grep
     constexpr int CTRL_G      =  7;  // git command prefix
     constexpr int CTRL_V      = 22;  // markdown preview toggle
+    constexpr int CTRL_B      =  2;  // split mode toggle
 } // namespace Key
