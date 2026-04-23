@@ -77,12 +77,17 @@ private:
 
     // split-screen
     bool splitMode_   = false;
-    int  splitBuf_    = -1;   // index of right-pane buffer (-1 = off)
-    int  splitFocus_  = 0;    // 0 = left (currentBuf_), 1 = right (splitBuf_)
-    bool splitSync_   = true; // synchronized scroll
+    int  splitBuf_    = -1;
+    int  splitFocus_  = 0;
+    bool splitSync_   = true;
+    int  splitScroll_ = 0;    // scroll into splitDiff_
+
+    struct DiffRow { int left; int right; };  // -1 = blank line
+    std::vector<DiffRow> splitDiff_;
+    void recomputeSplitDiff();
+
     void enableSplit(int rightBufIdx);
     void disableSplit();
-    void renderSplitEdit(std::string& out);
     // side: 0=left(new/green), 1=right(old/red)
     void renderOnePaneLines(std::string& out, Buffer* buf,
                             int startCol, int cols, int row,

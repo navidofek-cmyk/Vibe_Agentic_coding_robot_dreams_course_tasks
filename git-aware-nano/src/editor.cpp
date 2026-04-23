@@ -205,15 +205,10 @@ void Editor::render() {
             previewLines.push_back(std::string(editCols(), ' '));
     }
 
-    // --- Split mode: synchronize scroll (passive pane mirrors active) ---
-    if (splitMode_ && splitBuf_ >= 0 && splitBuf_ < (int)buffers_.size()) {
-        Buffer* active  = (splitFocus_ == 0) ? buffers_[currentBuf_].get()
-                                              : buffers_[splitBuf_].get();
-        Buffer* passive = (splitFocus_ == 0) ? buffers_[splitBuf_].get()
-                                              : buffers_[currentBuf_].get();
-        if (active && passive) {
-            passive->forceScrollRow(active->scrollRow());
-        }
+    // --- Split mode: clamp splitScroll_ ---
+    if (splitMode_) {
+        int maxScroll = std::max(0, (int)splitDiff_.size() - editRows() + 1);
+        splitScroll_ = std::max(0, std::min(splitScroll_, maxScroll));
     }
 
     // --- Panel + Edit area (rows 1 .. termRows-2) ---
@@ -293,30 +288,42 @@ void Editor::render() {
             int baseCol   = editStartCol() + 1;
             int sepCol    = baseCol + leftCols;
             int rightCol  = sepCol + 1;
+            int lnw       = lineNumWidth();
 
-            // row 0 is header; content starts at r=1 → buffer row r-1
-            int contentRow = r - 1;
+            // row 0 = legend header
+            if (r == 0) {
+                std::string lname = lb ? lb->displayName() : "?";
+                std::string rname = rb ? rb->displayName() : "?";
+                out += "\033[" + std::to_string(r + 2) + ";" + std::to_string(baseCol) + "H";
+                out += "\033[42m\033[30m \033[1mNEW\033[22m " + lname + " (HEAD)";
+                out += std::string(std::max(0, leftCols - (int)lname.size() - 9), ' ') + "\033[0m";
+                out += "\033[" + std::to_string(r + 2) + ";" + std::to_string(sepCol) + "H";
+                out += "\033[97m│\033[0m";
+                out += "\033[" + std::to_string(r + 2) + ";" + std::to_string(rightCol) + "H";
+                out += "\033[41m\033[97m \033[1mOLD\033[22m " + rname;
+                out += std::string(std::max(0, rightCols - (int)rname.size() - 5), ' ') + "\033[0m";
+                continue;
+            }
 
-            // compute diff lines for highlight
-            auto getLine = [](Buffer* b, int row) -> std::string {
-                if (!b || row < 0) return "";
-                int idx = b->scrollRow() + row;
-                const auto& ls = b->lines();
-                return (idx < (int)ls.size()) ? ls[idx] : "";
-            };
-            std::string lline = getLine(lb, contentRow);
-            std::string rline = getLine(rb, contentRow);
-            const std::string* ldiff = (lline != rline) ? &rline : nullptr;
-            const std::string* rdiff = (lline != rline) ? &lline : nullptr;
+            // LCS-based rendering: index into splitDiff_
+            int diffIdx = splitScroll_ + (r - 1);
+            int lIdx = -1, rIdx = -1;
+            bool isDiff = false;
+            if (diffIdx >= 0 && diffIdx < (int)splitDiff_.size()) {
+                lIdx = splitDiff_[diffIdx].left;
+                rIdx = splitDiff_[diffIdx].right;
+                isDiff = (lIdx == -1 || rIdx == -1 ||
+                          (lb && rb && lIdx < (int)lb->lines().size() &&
+                           rIdx < (int)rb->lines().size() &&
+                           lb->lines()[lIdx] != rb->lines()[rIdx]));
+            }
 
             // line number helper
-            int lnw = lineNumWidth();
-            auto renderLN = [&](Buffer* b, int col) {
-                if (!b || lnw <= 0 || contentRow < 0) return;
+            auto renderLN = [&](Buffer* b, int lineIdx, int col) {
+                if (!b || lnw <= 0) return;
                 out += "\033[" + std::to_string(r + 2) + ";" + std::to_string(col) + "H";
-                int li = b->scrollRow() + contentRow;
-                if (li < (int)b->lines().size()) {
-                    std::string ln = std::to_string(li + 1);
+                if (lineIdx >= 0 && lineIdx < (int)b->lines().size()) {
+                    std::string ln = std::to_string(lineIdx + 1);
                     while ((int)ln.size() < lnw - 1) ln = " " + ln;
                     out += "\033[90m" + ln + " \033[0m";
                 } else {
@@ -324,39 +331,44 @@ void Editor::render() {
                 }
             };
 
-            // row 0 = legend header
-            if (r == 0) {
-                std::string lname = lb ? lb->displayName() : "?";
-                std::string rname = rb ? rb->displayName() : "?";
-                // left header: green bg
-                out += "\033[" + std::to_string(r + 2) + ";" + std::to_string(baseCol) + "H";
-                std::string lhdr = " \033[1mNEW\033[0m\033[42m\033[30m " + lname + " (HEAD)";
-                out += "\033[42m\033[30m" + lhdr;
-                out += std::string(std::max(0, leftCols - (int)lname.size() - 10), ' ') + "\033[0m";
-                // separator
-                out += "\033[" + std::to_string(r + 2) + ";" + std::to_string(sepCol) + "H";
-                out += "\033[97m│\033[0m";
-                // right header: red bg
-                out += "\033[" + std::to_string(r + 2) + ";" + std::to_string(rightCol) + "H";
-                std::string rhdr = " \033[1mOLD\033[0m\033[41m\033[97m " + rname;
-                out += "\033[41m\033[97m" + rhdr;
-                out += std::string(std::max(0, rightCols - (int)rname.size() - 6), ' ') + "\033[0m";
-                continue;
-            }
+            // render one pane line by absolute index
+            auto renderLine = [&](Buffer* b, int lineIdx, int col, int cols, int side) {
+                out += "\033[" + std::to_string(r + 2) + ";" + std::to_string(col) + "H";
+                if (!b || cols <= 0) return;
+                if (lineIdx < 0) {
+                    // blank line (absent in this pane) — dim bg
+                    out += "\033[48;5;236m" + std::string(cols, ' ') + "\033[0m";
+                    return;
+                }
+                const auto& lines = b->lines();
+                if (isDiff) out += (side == 0) ? "\033[48;5;22m" : "\033[48;5;52m";
+                if (lineIdx < (int)lines.size()) {
+                    const std::string& line = lines[lineIdx];
+                    auto* hl = b->highlighter();
+                    if (hl) {
+                        auto spans = hl->highlight(line, lineIdx);
+                        out += renderHighlighted(line, spans, 0, cols);
+                    } else {
+                        std::string vis = line.size() > (size_t)cols ? line.substr(0, cols) : line;
+                        out += vis + std::string(cols - (int)vis.size(), ' ');
+                    }
+                } else {
+                    out += std::string(cols, ' ');
+                }
+                if (isDiff) out += "\033[0m";
+            };
 
             // left pane
-            renderLN(lb, baseCol);
-            out += "\033[" + std::to_string(r + 2) + ";" + std::to_string(baseCol + lnw) + "H";
-            renderOnePaneLines(out, lb, baseCol + lnw, leftCols - lnw, r - 1, ldiff, 0);
+            renderLN(lb, lIdx, baseCol);
+            renderLine(lb, lIdx, baseCol + lnw, leftCols - lnw, 0);
 
-            // separator — active pane gets bright color
+            // separator
             out += "\033[" + std::to_string(r + 2) + ";" + std::to_string(sepCol) + "H";
             out += (splitFocus_ == 0 ? "\033[97m│\033[0m" : "\033[90m│\033[0m");
 
             // right pane
-            renderLN(rb, rightCol);
-            out += "\033[" + std::to_string(r + 2) + ";" + std::to_string(rightCol + lnw) + "H";
-            renderOnePaneLines(out, rb, rightCol + lnw, rightCols - lnw, r - 1, rdiff, 1);
+            renderLN(rb, rIdx, rightCol);
+            renderLine(rb, rIdx, rightCol + lnw, rightCols - lnw, 1);
             out += "\033[0m";
             continue;
         }
@@ -636,14 +648,22 @@ void Editor::handleEditKey(int key) {
                   : currentBuffer();
 
     switch (key) {
-        case Key::ARROW_UP:    if (buf) buf->moveCursor(-1, 0); break;
-        case Key::ARROW_DOWN:  if (buf) buf->moveCursor( 1, 0); break;
+        case Key::ARROW_UP:
+            if (splitMode_) { splitScroll_ = std::max(0, splitScroll_ - 1); return; }
+            if (buf) buf->moveCursor(-1, 0); break;
+        case Key::ARROW_DOWN:
+            if (splitMode_) { splitScroll_++; return; }
+            if (buf) buf->moveCursor( 1, 0); break;
+        case Key::PAGE_UP:
+            if (splitMode_) { splitScroll_ = std::max(0, splitScroll_ - editRows()); return; }
+            if (buf) buf->moveCursorPageUp(editRows()); break;
+        case Key::PAGE_DOWN:
+            if (splitMode_) { splitScroll_ += editRows(); return; }
+            if (buf) buf->moveCursorPageDown(editRows()); break;
         case Key::ARROW_LEFT:  if (buf) buf->moveCursor(0, -1); break;
         case Key::ARROW_RIGHT: if (buf) buf->moveCursor(0,  1); break;
         case Key::HOME:        if (buf) buf->moveCursorHome();  break;
         case Key::END:         if (buf) buf->moveCursorEnd();   break;
-        case Key::PAGE_UP:     if (buf) buf->moveCursorPageUp(editRows());   break;
-        case Key::PAGE_DOWN:   if (buf) buf->moveCursorPageDown(editRows()); break;
         case Key::BACKSPACE:   if (buf) buf->deleteCharBefore(); break;
         case Key::DEL:         if (buf) buf->deleteCharAfter();  break;
         case Key::ENTER:       if (buf) buf->insertNewline();    break;
@@ -1477,16 +1497,60 @@ void Editor::renderFuzzyOverlay(std::string& out) {
 
 // ── Split screen ───────────────────────────────────────────────────────────
 
+void Editor::recomputeSplitDiff() {
+    splitDiff_.clear();
+    if (splitBuf_ < 0 || splitBuf_ >= (int)buffers_.size()) return;
+    auto* lb = currentBuffer();
+    auto* rb = buffers_[splitBuf_].get();
+    if (!lb || !rb) return;
+
+    const auto& A = lb->lines();
+    const auto& B = rb->lines();
+    int m = (int)A.size(), n = (int)B.size();
+
+    // LCS DP — limit to 800 lines for performance
+    int M = std::min(m, 800), N = std::min(n, 800);
+    std::vector<std::vector<int>> dp(M + 1, std::vector<int>(N + 1, 0));
+    for (int i = 1; i <= M; i++)
+        for (int j = 1; j <= N; j++)
+            dp[i][j] = (A[i-1] == B[j-1]) ? dp[i-1][j-1] + 1
+                                            : std::max(dp[i-1][j], dp[i][j-1]);
+
+    // Backtrack to build alignment
+    std::vector<DiffRow> rows;
+    int i = M, j = N;
+    while (i > 0 || j > 0) {
+        if (i > 0 && j > 0 && A[i-1] == B[j-1]) {
+            rows.push_back({i-1, j-1});
+            i--; j--;
+        } else if (j > 0 && (i == 0 || dp[i][j-1] >= dp[i-1][j])) {
+            rows.push_back({-1, j-1});  // only in right (removed from left)
+            j--;
+        } else {
+            rows.push_back({i-1, -1});  // only in left (added to left)
+            i--;
+        }
+    }
+    std::reverse(rows.begin(), rows.end());
+
+    // Append any lines beyond the LCS limit
+    for (int ii = M; ii < m; ii++) rows.push_back({ii, -1});
+    for (int jj = N; jj < n; jj++) rows.push_back({-1, jj});
+
+    splitDiff_ = std::move(rows);
+    splitScroll_ = 0;
+}
+
 void Editor::enableSplit(int rightBufIdx) {
     splitBuf_   = rightBufIdx;
     splitMode_  = true;
     splitFocus_ = 0;
     splitSync_  = true;
-    // both panes start from line 1 for comparison
-    if (auto* lb = currentBuffer())
-        lb->gotoLine(0, 0);
+    splitScroll_ = 0;
+    if (auto* lb = currentBuffer()) lb->gotoLine(0, 0);
     if (rightBufIdx >= 0 && rightBufIdx < (int)buffers_.size())
         buffers_[rightBufIdx]->gotoLine(0, 0);
+    recomputeSplitDiff();
 }
 
 void Editor::disableSplit() {
