@@ -576,8 +576,8 @@ void Editor::handleEditKey(int key) {
         case Key::CTRL_N:      newBuffer();         break;
         case Key::CTRL_F:      startFind();         break;
         case Key::CTRL_R:      startRecentFiles();   break;
-        case Key::CTRL_A:      prevBuffer();         break;
-        case Key::CTRL_E:      nextBuffer();         break;
+        case Key::CTRL_A:      disableSplit(); prevBuffer(); break;
+        case Key::CTRL_E:      disableSplit(); nextBuffer(); break;
         case Key::CTRL_P:      startFuzzyFinder();   break;
         case Key::CTRL_T:      startGrepSearch();    break;
         case Key::CTRL_G:      gitPrefixActive_ = true; setStatus("Git: B=blame D=diff L=log H=history T=tree C=branch S=stage R=refresh"); return;
