@@ -31,7 +31,7 @@ Git operace využívají `popen()` subprocess.
 make          # release build → build/nanoclone
 make debug    # debug build s -g
 make run      # sestaví a spustí
-make test     # spustí testy (test_highlighters + test_git)
+make test     # spustí všechny testy (156 testů ve 4 suitách)
 make clean    # smaže build/
 ```
 
@@ -64,6 +64,18 @@ make clean    # smaže build/
 | `Ctrl+G` | Git příkaz prefix (viz níže) |
 | `PgUp / PgDn` | Rychlá navigace |
 | `Home / End` | Začátek / konec řádku |
+
+### Split view (Ctrl+G T → commit → soubor → Enter)
+
+| Zkratka | Akce |
+|---------|------|
+| `Ctrl+G T` → Enter | Otevře split: vlevo HEAD, vpravo stará verze |
+| `↑ / ↓` | Scrolluje oba panely synchronizovaně |
+| `Tab` | Přepne focus mezi levým a pravým panelem |
+| `Ctrl+B` | Zapne/vypne split mode ručně |
+| `Ctrl+X` | Zavře split a aktuální buffer |
+
+Změněné řádky jsou zvýrazněny: **zelená** = nová verze (vlevo), **červená** = stará verze (vpravo). Prázdný tmavý řádek = přidaný/odebraný řádek (LCS alignment).
 
 ### Git (Ctrl+G prefix)
 
@@ -149,8 +161,10 @@ git-aware-nano/
     │   ├── git_blame.h/cpp    # git blame --porcelain → BlameEntry
     │   └── git_log.h/cpp      # log, větve, checkout, stage, tree
     └── tests/
-        ├── test_highlighters.cpp  # 37 unit testů pro highlighters
-        └── test_git.cpp           # 16 smoke testů pro git modul
+        ├── test_highlighters.cpp  # 37 testů — syntax highlighting
+        ├── test_git.cpp           # 16 testů — git operace (smoke)
+        ├── test_buffer.cpp        # 59 testů — Buffer (insert/delete/find/scroll/IO)
+        └── test_markdown.cpp      # 44 testů — markdown preview renderer
 ```
 
 ## Databáze
@@ -161,3 +175,35 @@ Tabulka `recent_files`:
 - `path` — absolutní cesta k souboru
 - `last_opened` — Unix timestamp
 - `cursor_row`, `cursor_col` — uložená pozice kurzoru
+
+## Testy
+
+```bash
+make test
+```
+
+| Suite | Testů | Co pokrývá |
+|-------|-------|------------|
+| `test_highlighters` | 37 | C++/Python/JSON/Markdown highlighting, makeHighlighter() factory |
+| `test_git` | 16 | detect, fileDiff, fileStatuses, fileLog, branches, refresh (živé repo) |
+| `test_buffer` | 59 | konstrukce, insert/delete, newline, kurzor, find, gotoLine, scroll, load/save, join řádků |
+| `test_markdown` | 44 | nadpisy, bold/italic, inline code, links, kódové bloky, blockquotes, listy, šířka |
+| **Celkem** | **156** | |
+
+### Paměťové testování
+
+Valgrind (potřebuje TTY):
+```bash
+valgrind --leak-check=full --track-origins=yes \
+  ./build/nanoclone soubor.txt
+```
+
+AddressSanitizer build:
+```bash
+g++ -std=c++17 -fsanitize=address,undefined -Isrc \
+  src/*.cpp src/git/*.cpp build/sqlite/sqlite3.o \
+  -o build/nanoclone_asan -lpthread
+./build/nanoclone_asan soubor.txt
+```
+
+> **Poznámka:** Interaktivní část editoru (`render()`, key handlers) není unit-testovatelná bez TTY. Pokrytí testů se vztahuje na `Buffer`, `SyntaxHighlighter`, `mdpreview::render()` a git moduly — přibližně 60–65 % codebase.
