@@ -421,6 +421,25 @@ void Editor::render() {
     out += "\033[" + std::to_string(termRows_) + ";1H";
     out += "\033[47m\033[30m";  // bg white, fg black
 
+    // Line/col indicator — right-aligned
+    {
+        Buffer* ibuf = (splitMode_ && splitFocus_ == 1 && splitBuf_ >= 0
+                        && splitBuf_ < (int)buffers_.size())
+                       ? buffers_[splitBuf_].get() : currentBuffer();
+        if (ibuf) {
+            std::string pos = " Ln " + std::to_string(ibuf->cursorRow() + 1)
+                            + ", Col " + std::to_string(ibuf->cursorCol() + 1) + " ";
+            // write right-aligned into last row
+            int col = termCols_ - (int)pos.size() + 1;
+            if (col > 0) {
+                out += "\033[" + std::to_string(termRows_) + ";"
+                     + std::to_string(col) + "H";
+                out += "\033[34m\033[1m" + pos + "\033[0m\033[47m\033[30m";
+                out += "\033[" + std::to_string(termRows_) + ";1H";
+            }
+        }
+    }
+
     if (!statusMsg_.empty()) {
         out += "\033[1m" + pad(statusMsg_, termCols_) + "\033[0m";
     } else {
