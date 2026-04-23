@@ -164,7 +164,9 @@ git-aware-nano/
         ├── test_highlighters.cpp  # 37 testů — syntax highlighting
         ├── test_git.cpp           # 16 testů — git operace (smoke)
         ├── test_buffer.cpp        # 59 testů — Buffer (insert/delete/find/scroll/IO)
-        └── test_markdown.cpp      # 44 testů — markdown preview renderer
+        ├── test_markdown.cpp      # 44 testů — markdown preview renderer
+        ├── test_properties.cpp    # 8 testů  — property-based (Buffer invarianty, highlighter bounds)
+        └── test_benchmark.cpp     # benchmarky výkonu (highlight, mdpreview, Buffer)
 ```
 
 ## Databáze
@@ -176,34 +178,66 @@ Tabulka `recent_files`:
 - `last_opened` — Unix timestamp
 - `cursor_row`, `cursor_col` — uložená pozice kurzoru
 
-## Testy
+## Testování
+
+### 1. Lokální spuštění
 
 ```bash
+# Vše najednou (164 testů + benchmarky)
 make test
+
+# Jednotlivé suite
+./build/tests/test_highlighters   # 37 testů
+./build/tests/test_git            # 16 testů
+./build/tests/test_buffer         # 59 testů
+./build/tests/test_markdown       # 44 testů
+./build/tests/test_properties     # 8 testů
+./build/tests/test_benchmark      # výkon
 ```
 
 | Suite | Testů | Co pokrývá |
 |-------|-------|------------|
-| `test_highlighters` | 37 | C++/Python/JSON/Markdown highlighting, makeHighlighter() factory |
-| `test_git` | 16 | detect, fileDiff, fileStatuses, fileLog, branches, refresh (živé repo) |
-| `test_buffer` | 59 | konstrukce, insert/delete, newline, kurzor, find, gotoLine, scroll, load/save, join řádků |
-| `test_markdown` | 44 | nadpisy, bold/italic, inline code, links, kódové bloky, blockquotes, listy, šířka |
-| **Celkem** | **156** | |
+| `test_highlighters` | 37 | C++/Python/JSON/Markdown highlighting, factory |
+| `test_git` | 16 | detect, fileDiff, fileStatuses, fileLog, branches (živé repo) |
+| `test_buffer` | 59 | insert/delete, kurzor, find, scroll, load/save, join řádků |
+| `test_markdown` | 44 | headings, bold/italic, inline code, links, code blocks, lists |
+| `test_properties` | 8 | Buffer invarianty, highlight bounds, mdpreview šířka/počet |
+| `test_benchmark` | — | highlight 1.1M ř/s · mdpreview 4.8M ř/s · insert 50k v 0.4ms |
+| **Celkem** | **164** | |
 
-### Paměťové testování
+### 2. Paměťové testování (AddressSanitizer)
 
-Valgrind (potřebuje TTY):
+Spustitelné bez TTY — detekuje memory leaks, use-after-free, buffer overflow:
+
 ```bash
-valgrind --leak-check=full --track-origins=yes \
-  ./build/nanoclone soubor.txt
+# test_buffer
+g++ -std=c++17 -fsanitize=address,undefined -g -O1 -fno-stack-protector -Isrc \
+    src/tests/test_buffer.cpp src/buffer.cpp -o /tmp/test_buf_asan
+ASAN_OPTIONS=detect_leaks=1 /tmp/test_buf_asan
+
+# test_markdown
+g++ -std=c++17 -fsanitize=address,undefined -g -O1 -fno-stack-protector -Isrc \
+    src/tests/test_markdown.cpp src/markdown_preview.cpp -o /tmp/test_md_asan
+ASAN_OPTIONS=detect_leaks=1 /tmp/test_md_asan
+
+# test_highlighters
+g++ -std=c++17 -fsanitize=address,undefined -g -O1 -fno-stack-protector -Isrc \
+    src/tests/test_highlighters.cpp src/highlighters.cpp -o /tmp/test_hl_asan
+ASAN_OPTIONS=detect_leaks=1 /tmp/test_hl_asan
 ```
 
-AddressSanitizer build:
-```bash
-g++ -std=c++17 -fsanitize=address,undefined -Isrc \
-  src/*.cpp src/git/*.cpp build/sqlite/sqlite3.o \
-  -o build/nanoclone_asan -lpthread
-./build/nanoclone_asan soubor.txt
-```
+**Výsledek: 0 memory errors, 0 leaks** na všech třech suitách.
 
-> **Poznámka:** Interaktivní část editoru (`render()`, key handlers) není unit-testovatelná bez TTY. Pokrytí testů se vztahuje na `Buffer`, `SyntaxHighlighter`, `mdpreview::render()` a git moduly — přibližně 60–65 % codebase.
+### 3. CI na GitHubu (automatické)
+
+Každý push do `main`/`master` automaticky spustí pipeline definovanou v `.github/workflows/ci.yml`:
+
+1. **maze_game testy** — `python3 maze_game/test_maze.py` (19 testů)
+2. **gnano build** — `make -C git-aware-nano`
+3. **gnano testy** — `make test` (164 testů)
+4. **ASAN** — test_buffer, test_markdown, test_highlighters s `-fsanitize=address,undefined`
+5. **Benchmark** — kontrola výkonnostního regrese
+
+Stav CI (zelené/červené checkmarky) je vidět přímo u každého commitu na GitHubu.
+
+> **Poznámka:** Interaktivní část (`render()`, key handlers) potřebuje TTY — není unit-testovatelná. Pokrytí: ~60–65 % codebase.
