@@ -289,7 +289,7 @@ void Editor::render() {
             int baseCol   = editStartCol() + 1;
             int sepCol    = baseCol + leftCols;
             int rightCol  = sepCol + 1;
-            int lnw       = lineNumWidth();
+            int lnw = 0;  // line numbers disabled in split for now
 
             // row 0 = legend header
             if (r == 0) {
@@ -390,25 +390,10 @@ void Editor::render() {
             }
             editCol += gutterWidth();
         }
-        // Line number
-        int lnw = lineNumWidth();
-        if (lnw > 0) {
-            out += "\033[" + std::to_string(r + 2) + ";" + std::to_string(editCol) + "H";
-            auto* buf = currentBuffer();
-            int lineIdx = buf ? (buf->scrollRow() + r) : -1;
-            if (buf && lineIdx < (int)buf->lines().size()) {
-                std::string ln = std::to_string(lineIdx + 1);
-                while ((int)ln.size() < lnw - 1) ln = " " + ln;
-                out += "\033[90m" + ln + " \033[0m";
-            } else {
-                out += std::string(lnw, ' ');
-            }
-            editCol += lnw;
-        }
         out += "\033[" + std::to_string(r + 2) + ";" + std::to_string(editCol) + "H";
 
         auto* buf = currentBuffer();
-        int textCols = std::max(1, editCols() - lnw);
+        int textCols = editCols();
         if (buf) {
             const auto& lines = buf->lines();
             int lineIdx = buf->scrollRow() + r;
