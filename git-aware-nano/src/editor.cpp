@@ -117,7 +117,8 @@ void Editor::closeCurrentBuffer() {
 
 void Editor::doCloseCurrentBuffer() {
     if (buffers_.empty()) return;
-    // persist cursor position before closing
+    // disable split before closing to avoid dangling splitBuf_
+    disableSplit();
     auto* buf = currentBuffer();
     if (buf && !buf->filename().empty())
         db_.savePosition(buf->filename(), buf->cursorRow(), buf->cursorCol());
