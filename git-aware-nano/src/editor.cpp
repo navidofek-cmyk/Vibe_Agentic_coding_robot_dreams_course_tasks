@@ -197,18 +197,16 @@ void Editor::render() {
             previewLines.push_back(std::string(editCols(), ' '));
     }
 
-    // --- Split mode: synchronize scroll ---
+    // --- Split mode: synchronize scroll (passive pane mirrors active) ---
     if (splitMode_ && splitBuf_ >= 0 && splitBuf_ < (int)buffers_.size()) {
-        Buffer* lb = currentBuffer();
-        Buffer* rb = buffers_[splitBuf_].get();
-        if (splitSync_ && lb && rb) {
-            if (splitFocus_ == 0)
-                rb->updateScroll(editRows(), (editCols() - 1) / 2);
-            // mirror scroll row
-            int sr = (splitFocus_ == 0 ? lb : rb)->scrollRow();
-            (splitFocus_ == 0 ? rb : lb)->gotoLine(sr + editRows() / 2,
-                (splitFocus_ == 0 ? rb : lb)->cursorCol());
-            (splitFocus_ == 0 ? rb : lb)->updateScroll(editRows(), (editCols() - 1) / 2);
+        Buffer* active  = buffers_[currentBuf_].get();
+        Buffer* passive = buffers_[splitBuf_].get();
+        if (splitSync_ && active && passive) {
+            int sr = active->scrollRow();
+            int n  = (int)passive->lines().size();
+            int target = std::min(sr, std::max(0, n - 1));
+            passive->gotoLine(target, passive->cursorCol());
+            passive->updateScroll(editRows(), (editCols() - 1) / 2);
         }
     }
 
@@ -286,24 +284,33 @@ void Editor::render() {
             int totalCols = editCols();
             int leftCols  = (totalCols - 1) / 2;
             int rightCols = totalCols - leftCols - 1;
-            int baseCol   = editStartCol() + 1;   // 1-based
+            int baseCol   = editStartCol() + 1;
             int sepCol    = baseCol + leftCols;
             int rightCol  = sepCol + 1;
 
+            // compute diff lines for highlight
+            auto getLine = [](Buffer* b, int row) -> std::string {
+                if (!b) return "";
+                int idx = b->scrollRow() + row;
+                const auto& ls = b->lines();
+                return (idx < (int)ls.size()) ? ls[idx] : "";
+            };
+            std::string lline = getLine(lb, r);
+            std::string rline = getLine(rb, r);
+            const std::string* ldiff = (lline != rline) ? &rline : nullptr;
+            const std::string* rdiff = (lline != rline) ? &lline : nullptr;
+
             // left pane
             out += "\033[" + std::to_string(r + 2) + ";" + std::to_string(baseCol) + "H";
-            if (splitFocus_ == 0) out += "\033[0m"; else out += "\033[2m";
-            renderOnePaneLines(out, lb, baseCol, leftCols, r);
-            out += "\033[0m";
+            renderOnePaneLines(out, lb, baseCol, leftCols, r, ldiff);
 
-            // separator
+            // separator — active pane gets bright color
             out += "\033[" + std::to_string(r + 2) + ";" + std::to_string(sepCol) + "H";
-            out += "\033[90m│\033[0m";
+            out += (splitFocus_ == 0 ? "\033[97m│\033[0m" : "\033[90m│\033[0m");
 
             // right pane
             out += "\033[" + std::to_string(r + 2) + ";" + std::to_string(rightCol) + "H";
-            if (splitFocus_ == 1) out += "\033[0m"; else out += "\033[2m";
-            renderOnePaneLines(out, rb, rightCol, rightCols, r);
+            renderOnePaneLines(out, rb, rightCol, rightCols, r, rdiff);
             out += "\033[0m";
             continue;
         }
@@ -1383,17 +1390,37 @@ void Editor::disableSplit() {
     splitFocus_ = 0;
 }
 
-// Render one line of a buffer into `out` at given terminal column (1-based),
-// clipped/padded to `cols` visible characters.
+// Render one line of a buffer; if `diffLine` is non-null and differs, use diff bg.
 void Editor::renderOnePaneLines(std::string& out, Buffer* buf,
-                                 int startCol1, int cols, int row) {
+                                 int startCol1, int cols, int row,
+                                 const std::string* diffLine) {
     if (!buf || cols <= 0) {
-        if (cols > 0)
-            out += std::string(cols, ' ');
+        if (cols > 0) out += std::string(cols, ' ');
         return;
     }
     const auto& lines = buf->lines();
     int lineIdx = buf->scrollRow() + row;
+
+    // Diff highlight: dark red bg for changed lines, dark green for added
+    bool isDiff = false;
+    bool isAdded = false;  // line exists here but not in other pane
+    if (diffLine) {
+        if (lineIdx < (int)lines.size()) {
+            isDiff = (lines[lineIdx] != *diffLine);
+        } else {
+            // this pane has no line here but other does → added in other
+            isDiff = !diffLine->empty();
+        }
+    }
+    // empty diffLine means other pane ran out of lines
+    if (diffLine && diffLine->empty() && lineIdx < (int)lines.size())
+        isAdded = true;
+
+    if (isDiff || isAdded) {
+        // dark yellow bg for changed, dark green bg for unique lines
+        out += isAdded ? "\033[48;5;22m" : "\033[48;5;52m";
+    }
+
     if (lineIdx < (int)lines.size()) {
         const std::string& line = lines[lineIdx];
         auto* hl = buf->highlighter();
@@ -1412,5 +1439,7 @@ void Editor::renderOnePaneLines(std::string& out, Buffer* buf,
     } else {
         out += std::string(cols, ' ');
     }
+
+    if (isDiff || isAdded) out += "\033[0m";
     (void)startCol1;
 }

@@ -84,7 +84,8 @@ private:
     void disableSplit();
     void renderSplitEdit(std::string& out);
     void renderOnePaneLines(std::string& out, Buffer* buf,
-                            int startCol, int cols, int gutterCol);
+                            int startCol, int cols, int row,
+                            const std::string* diffLine = nullptr);
 
     // git overlays (branch picker, log, blame, diff)
     GitOverlayKind                   gitOverlayKind_  = GitOverlayKind::BranchPick;
