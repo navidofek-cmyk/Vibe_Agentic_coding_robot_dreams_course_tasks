@@ -82,13 +82,13 @@ int Editor::editRows() const     { return std::max(1, termRows_ - 2); }
 int Editor::editStartCol() const { return panelVisible_ ? kPanelWidth + 1 : 0; }
 int Editor::lineNumWidth() {
     auto* buf = currentBuffer();
-    if (!buf) return 0;
+    if (!buf || buf->lines().empty()) return 0;
     int n = (int)buf->lines().size();
     int w = 1;
     while (n >= 10) { n /= 10; w++; }
     return w + 1;  // digits + space
 }
-int Editor::editCols()           { return std::max(1, termCols_ - editStartCol() - gutterWidth() - lineNumWidth()); }
+int Editor::editCols()           { return std::max(1, termCols_ - editStartCol() - gutterWidth()); }
 void Editor::setStatus(const std::string& msg) { statusMsg_ = msg; }
 
 std::string Editor::pad(const std::string& s, int width) {
@@ -408,36 +408,37 @@ void Editor::render() {
         out += "\033[" + std::to_string(r + 2) + ";" + std::to_string(editCol) + "H";
 
         auto* buf = currentBuffer();
+        int textCols = std::max(1, editCols() - lnw);
         if (buf) {
             const auto& lines = buf->lines();
             int lineIdx = buf->scrollRow() + r;
             if (buf->previewMode()) {
                 out += (r < (int)previewLines.size())
                     ? previewLines[r]
-                    : std::string(editCols(), ' ');
+                    : std::string(textCols, ' ');
             } else if (lineIdx < (int)lines.size()) {
                 const std::string& line = lines[lineIdx];
                 auto* hl = buf->highlighter();
                 if (hl) {
                     auto spans = hl->highlight(line, lineIdx);
-                    out += renderHighlighted(line, spans, buf->scrollCol(), editCols());
+                    out += renderHighlighted(line, spans, buf->scrollCol(), textCols);
                 } else {
                     int sc = buf->scrollCol();
                     std::string visible;
                     if (sc < (int)line.size())
-                        visible = line.substr(sc, editCols());
+                        visible = line.substr(sc, textCols);
                     out += visible;
-                    int rem = editCols() - (int)visible.size();
+                    int rem = textCols - (int)visible.size();
                     if (rem > 0) out += std::string(rem, ' ');
                 }
             } else {
-                out += std::string(editCols(), ' ');
+                out += std::string(textCols, ' ');
             }
         } else {
             if (r == 0)
-                out += pad("  ^N New   ^O Panel   ^R Recent files", editCols());
+                out += pad("  ^N New   ^O Panel   ^R Recent files", textCols);
             else
-                out += std::string(editCols(), ' ');
+                out += std::string(textCols, ' ');
         }
     }
 
