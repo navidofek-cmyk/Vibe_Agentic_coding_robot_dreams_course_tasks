@@ -1,5 +1,6 @@
 token
 claude/git-aware-nano/build/
+chat_history/
 api.py
 hw_01/api.py
 .venv/
