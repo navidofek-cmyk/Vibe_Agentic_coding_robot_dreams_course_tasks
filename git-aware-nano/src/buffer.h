@@ -44,6 +44,11 @@ public:
     bool previewMode() const { return previewMode_; }
     void togglePreview()     { previewMode_ = !previewMode_; }
 
+    void forceScrollRow(int row) {
+        int n = std::max(1, (int)lines_.size());
+        scrollRow_ = std::max(0, std::min(row, n - 1));
+    }
+
 private:
     std::vector<std::string> lines_;
     std::string filename_;

@@ -150,8 +150,9 @@ private:
 
     Buffer* currentBuffer();
     int editRows() const;
-    int editCols() const;
+    int editCols();
     int editStartCol() const;
+    int lineNumWidth();
     void setStatus(const std::string& msg);
     void refreshSize();
 };

@@ -80,7 +80,15 @@ Buffer* Editor::currentBuffer() {
 int Editor::gutterWidth() const  { return repoInfo_.valid ? 2 : 0; }
 int Editor::editRows() const     { return std::max(1, termRows_ - 2); }
 int Editor::editStartCol() const { return panelVisible_ ? kPanelWidth + 1 : 0; }
-int Editor::editCols() const     { return std::max(1, termCols_ - editStartCol() - gutterWidth()); }
+int Editor::lineNumWidth() {
+    auto* buf = currentBuffer();
+    if (!buf) return 0;
+    int n = (int)buf->lines().size();
+    int w = 1;
+    while (n >= 10) { n /= 10; w++; }
+    return w + 1;  // digits + space
+}
+int Editor::editCols()           { return std::max(1, termCols_ - editStartCol() - gutterWidth() - lineNumWidth()); }
 void Editor::setStatus(const std::string& msg) { statusMsg_ = msg; }
 
 std::string Editor::pad(const std::string& s, int width) {
@@ -204,12 +212,7 @@ void Editor::render() {
         Buffer* passive = (splitFocus_ == 0) ? buffers_[splitBuf_].get()
                                               : buffers_[currentBuf_].get();
         if (active && passive) {
-            int sr = active->scrollRow();
-            int n  = (int)passive->lines().size();
-            int target = std::min(sr, std::max(0, n - 1));
-            // force passive scrollRow to match without moving cursor visibly
-            passive->gotoLine(target, passive->cursorCol());
-            passive->updateScroll(editRows(), (editCols() - 1) / 2);
+            passive->forceScrollRow(active->scrollRow());
         }
     }
 
@@ -333,6 +336,21 @@ void Editor::render() {
                 default:                        out += "  ";                  break;
             }
             editCol += gutterWidth();
+        }
+        // Line number
+        int lnw = lineNumWidth();
+        if (lnw > 0) {
+            out += "\033[" + std::to_string(r + 2) + ";" + std::to_string(editCol) + "H";
+            auto* buf = currentBuffer();
+            int lineIdx = buf ? (buf->scrollRow() + r) : -1;
+            if (buf && lineIdx < (int)buf->lines().size()) {
+                std::string ln = std::to_string(lineIdx + 1);
+                while ((int)ln.size() < lnw - 1) ln = " " + ln;
+                out += "\033[90m" + ln + " \033[0m";
+            } else {
+                out += std::string(lnw, ' ');
+            }
+            editCol += lnw;
         }
         out += "\033[" + std::to_string(r + 2) + ";" + std::to_string(editCol) + "H";
 
