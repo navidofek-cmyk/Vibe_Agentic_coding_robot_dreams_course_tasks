@@ -472,17 +472,25 @@ void Editor::render() {
 
     // Position cursor
     if (mode_ == Mode::Edit) {
-        if (auto* buf = currentBuffer()) {
-            int cy = buf->cursorRow() - buf->scrollRow() + 2;
+        Buffer* cbuf = (splitMode_ && splitFocus_ == 1 && splitBuf_ >= 0
+                        && splitBuf_ < (int)buffers_.size())
+                       ? buffers_[splitBuf_].get() : currentBuffer();
+        if (cbuf) {
+            int cy = cbuf->cursorRow() - cbuf->scrollRow() + 2;
             int cx;
             if (splitMode_) {
-                // left pane starts at editStartCol+1, width=(editCols-1)/2
-                cx = buf->cursorCol() - buf->scrollCol() + editStartCol() + 1;
+                int leftCols = (editCols() - 1) / 2;
+                if (splitFocus_ == 0) {
+                    cx = cbuf->cursorCol() - cbuf->scrollCol() + editStartCol() + 1;
+                } else {
+                    // right pane starts after separator
+                    cx = cbuf->cursorCol() - cbuf->scrollCol() + editStartCol() + leftCols + 2;
+                }
             } else {
-                cx = buf->cursorCol() - buf->scrollCol() + editStartCol() + gutterWidth() + 1;
+                cx = cbuf->cursorCol() - cbuf->scrollCol() + editStartCol() + gutterWidth() + 1;
             }
             out += "\033[" + std::to_string(cy) + ";" + std::to_string(cx) + "H";
-            out += "\033[?25h";  // show cursor
+            out += "\033[?25h";
         }
     } else if (mode_ == Mode::Find || mode_ == Mode::SaveAs) {
         int prefix = (mode_ == Mode::Find) ? 6 : 9;
@@ -541,7 +549,12 @@ void Editor::handleEditKey(int key) {
         return;
     }
 
-    auto* buf = currentBuffer();
+    // In split mode, route input to the focused pane
+    Buffer* buf = (splitMode_ && splitFocus_ == 1 && splitBuf_ >= 0
+                   && splitBuf_ < (int)buffers_.size())
+                  ? buffers_[splitBuf_].get()
+                  : currentBuffer();
+
     switch (key) {
         case Key::ARROW_UP:    if (buf) buf->moveCursor(-1, 0); break;
         case Key::ARROW_DOWN:  if (buf) buf->moveCursor( 1, 0); break;
@@ -580,15 +593,7 @@ void Editor::handleEditKey(int key) {
         case '\t':
             if (splitMode_) {
                 splitFocus_ = 1 - splitFocus_;
-                if (splitFocus_ == 1) {
-                    // move edit focus to right pane
-                    std::swap(currentBuf_, splitBuf_);
-                    splitFocus_ = 0;  // left is always "active" buffer
-                } else {
-                    std::swap(currentBuf_, splitBuf_);
-                    splitFocus_ = 1;
-                }
-                setStatus(splitFocus_ == 0 ? "Focus: left" : "Focus: right");
+                setStatus(splitFocus_ == 0 ? "Focus: left pane" : "Focus: right pane");
             }
             return;
         case Key::CTRL_V:
@@ -605,6 +610,12 @@ void Editor::handleEditKey(int key) {
     if (buf) {
         int cols = splitMode_ ? (editCols() - 1) / 2 : editCols();
         buf->updateScroll(editRows(), cols);
+        // keep sync: update passive pane too
+        if (splitMode_ && splitBuf_ >= 0 && splitBuf_ < (int)buffers_.size()) {
+            Buffer* passive = (splitFocus_ == 0) ? buffers_[splitBuf_].get() : currentBuffer();
+            if (passive && passive != buf)
+                passive->updateScroll(editRows(), cols);
+        }
     }
 }
 
