@@ -29,6 +29,14 @@ TEST_GIT_SRCS := $(TEST_DIR)/test_git.cpp \
                  $(SRC_DIR)/git/git_log.cpp
 TEST_GIT_BIN  := $(TEST_BUILD)/test_git
 
+TEST_BUF_SRCS := $(TEST_DIR)/test_buffer.cpp \
+                 $(SRC_DIR)/buffer.cpp
+TEST_BUF_BIN  := $(TEST_BUILD)/test_buffer
+
+TEST_MD_SRCS  := $(TEST_DIR)/test_markdown.cpp \
+                 $(SRC_DIR)/markdown_preview.cpp
+TEST_MD_BIN   := $(TEST_BUILD)/test_markdown
+
 .PHONY: all clean run debug test
 
 all: $(TARGET)
@@ -59,11 +67,23 @@ $(TEST_GIT_BIN): $(TEST_GIT_SRCS)
 	@mkdir -p $(TEST_BUILD)
 	$(CXX) $(CXXFLAGS) -I$(SRC_DIR) $(TEST_GIT_SRCS) -o $@ $(LDFLAGS)
 
-test: $(TEST_HL_BIN) $(TEST_GIT_BIN)
+$(TEST_BUF_BIN): $(TEST_BUF_SRCS)
+	@mkdir -p $(TEST_BUILD)
+	$(CXX) $(CXXFLAGS) -I$(SRC_DIR) $(TEST_BUF_SRCS) -o $@
+
+$(TEST_MD_BIN): $(TEST_MD_SRCS)
+	@mkdir -p $(TEST_BUILD)
+	$(CXX) $(CXXFLAGS) -I$(SRC_DIR) $(TEST_MD_SRCS) -o $@
+
+test: $(TEST_HL_BIN) $(TEST_GIT_BIN) $(TEST_BUF_BIN) $(TEST_MD_BIN)
 	@echo "=== test_highlighters ==="
 	@$(TEST_HL_BIN)
 	@echo "=== test_git ==="
 	@$(TEST_GIT_BIN)
+	@echo "=== test_buffer ==="
+	@$(TEST_BUF_BIN)
+	@echo "=== test_markdown ==="
+	@$(TEST_MD_BIN)
 
 clean:
 	rm -rf $(BUILD_DIR)
