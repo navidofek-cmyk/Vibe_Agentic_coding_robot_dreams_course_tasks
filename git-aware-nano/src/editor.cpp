@@ -1424,6 +1424,11 @@ void Editor::enableSplit(int rightBufIdx) {
     splitMode_  = true;
     splitFocus_ = 0;
     splitSync_  = true;
+    // both panes start from line 1 for comparison
+    if (auto* lb = currentBuffer())
+        lb->gotoLine(0, 0);
+    if (rightBufIdx >= 0 && rightBufIdx < (int)buffers_.size())
+        buffers_[rightBufIdx]->gotoLine(0, 0);
 }
 
 void Editor::disableSplit() {
