@@ -199,12 +199,15 @@ void Editor::render() {
 
     // --- Split mode: synchronize scroll (passive pane mirrors active) ---
     if (splitMode_ && splitBuf_ >= 0 && splitBuf_ < (int)buffers_.size()) {
-        Buffer* active  = buffers_[currentBuf_].get();
-        Buffer* passive = buffers_[splitBuf_].get();
-        if (splitSync_ && active && passive) {
+        Buffer* active  = (splitFocus_ == 0) ? buffers_[currentBuf_].get()
+                                              : buffers_[splitBuf_].get();
+        Buffer* passive = (splitFocus_ == 0) ? buffers_[splitBuf_].get()
+                                              : buffers_[currentBuf_].get();
+        if (active && passive) {
             int sr = active->scrollRow();
             int n  = (int)passive->lines().size();
             int target = std::min(sr, std::max(0, n - 1));
+            // force passive scrollRow to match without moving cursor visibly
             passive->gotoLine(target, passive->cursorCol());
             passive->updateScroll(editRows(), (editCols() - 1) / 2);
         }
