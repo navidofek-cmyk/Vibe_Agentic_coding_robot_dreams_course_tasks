@@ -1,0 +1,8 @@
+[project]
+name = "code-review-pipeline"
+version = "0.1.0"
+description = "Multi-agent code review pipeline — OpenAI edition"
+requires-python = ">=3.11"
+dependencies = [
+    "openai>=1.50.0",
+]
