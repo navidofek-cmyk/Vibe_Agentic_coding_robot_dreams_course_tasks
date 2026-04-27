@@ -1,0 +1,5 @@
+# No third-party packages required.
+# The pipeline uses the `claude` CLI (Claude Code) which is already installed
+# and authenticated via the active Claude Code session.
+#
+# Run: python3 main.py examples/vulnerable_app.py
