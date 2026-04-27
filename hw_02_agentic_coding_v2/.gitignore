@@ -1,5 +1,7 @@
 .env
+.env.save
+.env.bak
 .venv/
 __pycache__/
 *.pyc
-report.md
+reports/

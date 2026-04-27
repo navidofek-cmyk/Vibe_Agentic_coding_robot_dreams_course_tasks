@@ -1,7 +1,6 @@
 #!/usr/bin/env bash
-# Spustí code review pipeline na zadaném souboru.
+# Spustí code review pipeline a automaticky uloží report do reports/.
 # Použití: ./review.sh examples/budget_tracker.py
-#          ./review.sh examples/vulnerable_app.py --output report.md
 
 set -euo pipefail
 
@@ -14,15 +13,25 @@ if [ ! -f "$ENV_FILE" ]; then
 fi
 
 if [ $# -eq 0 ]; then
-    echo "Použití: $0 <soubor_nebo_adresář> [--output report.md]"
+    echo "Použití: $0 <soubor_nebo_adresář>"
     echo ""
     echo "Příklady:"
     echo "  $0 examples/budget_tracker.py"
     echo "  $0 examples/vulnerable_app.py"
     echo "  $0 examples/clean_service.py"
-    echo "  $0 examples/ --output report.md"
     exit 1
 fi
 
+TARGET="$1"
+BASENAME="$(basename "$TARGET" .py)"
+TIMESTAMP="$(date +%Y%m%d_%H%M%S)"
+REPORTS_DIR="$SCRIPT_DIR/reports"
+REPORT_FILE="$REPORTS_DIR/${BASENAME}_${TIMESTAMP}.md"
+
+mkdir -p "$REPORTS_DIR"
+
 cd "$SCRIPT_DIR"
-uv run --env-file "$ENV_FILE" python main.py "$@"
+uv run --env-file "$ENV_FILE" python main.py "$TARGET" --output "$REPORT_FILE"
+
+echo ""
+echo "Report uložen: $REPORT_FILE"
