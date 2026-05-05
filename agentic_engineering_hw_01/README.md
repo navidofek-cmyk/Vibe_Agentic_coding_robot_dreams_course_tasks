@@ -3,6 +3,16 @@
 Multi-agent systém postavený na **Claude Agent SDK**, který provede automatizované
 code review Python souboru a vygeneruje přehledný Markdown report.
 
+## Zadání / Assignment
+
+> **Vytvořte projekt s praktickým použitím SDK pro kódovacích agentů. Cílem je, aby projekt demonstroval libovolnou orchestraci, tzn. workflow nebo multi-agent, a zároveň měl praktické použití.**
+>
+> Kódovací agenti: Codex / **Claude Code** ← zvoleno
+>
+> Multi-agent: Collaboration / **Supervisor** / **Swarm** ← zvoleno (oba)
+>
+> Formát: odkaz na GitHub | Deadline: 8. 5. 2026 | Max bodů: 100
+
 ## Úkolové shrnutí / Assignment Mapping
 
 Tento projekt je řešením úkolu z kurzu Agentic Engineering / Vibe Coding.
