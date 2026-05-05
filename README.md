@@ -4,6 +4,18 @@ Repozitář obsahuje samostatné projekty vytvořené v kurzu agentic coding.
 
 ## Projekty
 
+### `agentic_engineering_hw_01/` — Multi-Agent Code Reviewer (Claude Agent SDK)
+Multi-agent systém pro automatizované code review Python souborů. Implementuje dva multi-agent patterny:
+- **Supervisor pattern** — orchestruje Quality Agent, Tests Agent a Security Swarm paralelně
+- **Swarm pattern** — 5 autonomních security checkerů (SQL injection, secrets, deserializace, path traversal, auth)
+
+Používá `AgentDefinition` + `ClaudeSDKClient` + MCP tool pro AST analýzu kódu.
+
+```bash
+cd agentic_engineering_hw_01
+uv run code-reviewer examples/buggy_app.py
+```
+
 ### `hw_01/` — OpenAI Tool Calling
 Ukázka tool callingu přes OpenAI API, spouštěna přes `uv`.
 
