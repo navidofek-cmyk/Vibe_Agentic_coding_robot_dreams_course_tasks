@@ -16,6 +16,18 @@ cd agentic_engineering_hw_01
 uv run code-reviewer examples/buggy_app.py
 ```
 
+### `vibe_coding_hw_02/` — Python Backend Developer Agent (Claude Code)
+Konfigurace Claude Code agenta pro Python backend vývoj:
+- **MCP servery:** git, sqlite, fetch, postgres + vlastní `python-linter` (ruff + mypy přes FastMCP)
+- **Subagenti:** security-reviewer, test-writer, architect
+- **Skills:** python-backend (FastAPI/SQLAlchemy), api-design (REST konvence)
+- **Demo app:** FastAPI TODO list vygenerovaný agentem (10 testů)
+
+```bash
+cd vibe_coding_hw_02
+claude  # spustí nakonfigurovaného agenta
+```
+
 ### `hw_01/` — OpenAI Tool Calling
 Ukázka tool callingu přes OpenAI API, spouštěna přes `uv`.
 
