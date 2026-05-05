@@ -1,0 +1,24 @@
+{
+  "mcpServers": {
+    "git": {
+      "command": "uvx",
+      "args": ["mcp-server-git", "--repository", "."]
+    },
+    "sqlite": {
+      "command": "uvx",
+      "args": ["mcp-server-sqlite", "--db-path", "./dev.db"]
+    },
+    "fetch": {
+      "command": "uvx",
+      "args": ["mcp-server-fetch"]
+    },
+    "postgres": {
+      "command": "uvx",
+      "args": ["mcp-server-postgres", "${DATABASE_URL}"]
+    },
+    "python-linter": {
+      "command": "uv",
+      "args": ["run", "--project", "mcp_servers/python_linter", "python", "mcp_servers/python_linter/server.py"]
+    }
+  }
+}

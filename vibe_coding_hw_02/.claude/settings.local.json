@@ -1,0 +1,10 @@
+{
+  "permissions": {
+    "allow": [
+      "Bash(mkdir -p /home/ivand/projects/learning_python/vibe_coding_hw02_sdk/vibe_coding_hw_02/todo_app/todo_app/routers)",
+      "Bash(mkdir -p /home/ivand/projects/learning_python/vibe_coding_hw02_sdk/vibe_coding_hw_02/todo_app/tests)",
+      "Bash(uv sync *)",
+      "Bash(uv run *)"
+    ]
+  }
+}
