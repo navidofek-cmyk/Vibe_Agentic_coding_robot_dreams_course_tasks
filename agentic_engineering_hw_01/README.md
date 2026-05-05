@@ -3,6 +3,30 @@
 Multi-agent systém postavený na **Claude Agent SDK**, který provede automatizované
 code review Python souboru a vygeneruje přehledný Markdown report.
 
+## Úkolové shrnutí / Assignment Mapping
+
+Tento projekt je řešením úkolu z kurzu Agentic Engineering / Vibe Coding.
+
+### Splnění požadavků
+
+- **Kódovací agent:** projekt používá Claude Agent SDK a `ClaudeSDKClient`
+- **Sub-agenti:** systém obsahuje Security Swarm, Quality Agent, Tests Agent a Supervisor
+- **Skills:** agenti reprezentují specializované schopnosti:
+  - security analysis (5 checkerů: SQL injection, secrets, deserializace, path traversal, auth)
+  - code quality review
+  - test generation
+  - report synthesis
+- **Multi-agent pattern:** projekt demonstruje dva patterny:
+  - Supervisor pattern (vrstva 1)
+  - Swarm pattern (vrstva 3 — Security Sub-Swarm)
+- **Praktické použití:** automatizované code review Python souboru přes CLI
+
+### MCP
+
+Projekt obsahuje in-process MCP server (`create_sdk_mcp_server` z Claude Agent SDK) s nástrojem `analyze_code_structure` — provádí AST analýzu Python souboru a předává výsledky Quality Agentovi jako kontext před jeho vlastní analýzou. Není to externí MCP server; tooling je řešen přímo v kódu přes `@tool` dekorátor.
+
+---
+
 ## Co to dělá
 
 Zadáš soubor → tři AI agenti ho paralelně zkontrolují → dostaneš report.
