@@ -8,6 +8,7 @@ chat_history/
 workspace/lessons/
 workspace/exercises/*.py
 !workspace/exercises/ukazka_cviceni.py
+!workspace/exercises/rekurze_cviceni.py
 
 # Python
 __pycache__/
