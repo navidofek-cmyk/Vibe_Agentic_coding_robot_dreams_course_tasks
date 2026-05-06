@@ -1,0 +1,136 @@
+{
+  "mcpServers": {
+    "filesystem": {
+      "command": "npx",
+      "args": [
+        "-y",
+        "@modelcontextprotocol/server-filesystem",
+        "/home/user/projects"
+      ],
+      "env": {},
+      "description": "Přístup k souborovému systému – čtení, zápis, procházení adresářů"
+    },
+    "github": {
+      "command": "npx",
+      "args": [
+        "-y",
+        "@modelcontextprotocol/server-github"
+      ],
+      "env": {
+        "GITHUB_PERSONAL_ACCESS_TOKEN": "${GITHUB_TOKEN}"
+      },
+      "description": "GitHub integrace – issues, PRs, repozitáře, commit history"
+    },
+    "brave-search": {
+      "command": "npx",
+      "args": [
+        "-y",
+        "@modelcontextprotocol/server-brave-search"
+      ],
+      "env": {
+        "BRAVE_API_KEY": "${BRAVE_API_KEY}"
+      },
+      "description": "Webové vyhledávání přes Brave Search API"
+    },
+    "sqlite": {
+      "command": "npx",
+      "args": [
+        "-y",
+        "@modelcontextprotocol/server-sqlite",
+        "--db-path",
+        "/home/user/projects/data/app.db"
+      ],
+      "env": {},
+      "description": "Přímý přístup k SQLite databázi – dotazy, schéma, analýza dat"
+    },
+    "memory": {
+      "command": "npx",
+      "args": [
+        "-y",
+        "@modelcontextprotocol/server-memory"
+      ],
+      "env": {},
+      "description": "Perzistentní paměť agenta přes Knowledge Graph"
+    }
+  },
+
+  "permissions": {
+    "allow": [
+      "Bash(npm:*)",
+      "Bash(npx:*)",
+      "Bash(git status)",
+      "Bash(git diff:*)",
+      "Bash(git log:*)",
+      "Bash(git add:*)",
+      "Bash(git commit:*)",
+      "Bash(python3:*)",
+      "Bash(pytest:*)",
+      "Bash(pip:*)",
+      "Bash(find:*)",
+      "Bash(grep:*)",
+      "Bash(ls:*)",
+      "Bash(cat:*)",
+      "Bash(echo:*)"
+    ],
+    "deny": [
+      "Bash(rm -rf:*)",
+      "Bash(git push --force:*)",
+      "Bash(sudo:*)"
+    ]
+  },
+
+  "hooks": {
+    "PreToolUse": [
+      {
+        "matcher": "Bash",
+        "hooks": [
+          {
+            "type": "command",
+            "command": "echo '[Hook] Spouštím Bash příkaz – kontroluji bezpečnost...' >&2"
+          }
+        ]
+      }
+    ],
+    "PostToolUse": [
+      {
+        "matcher": "Edit|Write",
+        "hooks": [
+          {
+            "type": "command",
+            "command": "echo '[Hook] Soubor upraven. Spouštím linter...' >&2 && (command -v ruff >/dev/null 2>&1 && ruff check --select E,W --quiet \"$CLAUDE_TOOL_RESULT_FILE_PATH\" 2>/dev/null || true)"
+          }
+        ]
+      },
+      {
+        "matcher": "Bash",
+        "hooks": [
+          {
+            "type": "command",
+            "command": "echo '[Hook] Bash příkaz dokončen.' >&2"
+          }
+        ]
+      }
+    ],
+    "Stop": [
+      {
+        "hooks": [
+          {
+            "type": "command",
+            "command": "echo '[Hook] Claude dokončil práci. Výsledky jsou připraveny.' >&2"
+          }
+        ]
+      }
+    ]
+  },
+
+  "env": {
+    "PYTHONPATH": "/home/user/projects",
+    "NODE_ENV": "development"
+  },
+
+  "model": "claude-sonnet-4-6",
+
+  "theme": "dark",
+
+  "autoUpdaterStatus": "enabled"
+}

@@ -1,0 +1,46 @@
+# Codex CLI – konfigurace pro Python Learning Assistant
+# Umístění: ~/.codex/config.yaml
+#
+# Dokumentace: https://github.com/openai/codex
+
+# Model – o4-mini je rychlý a levný pro výukové úkoly
+model: o4-mini
+
+# Provider
+provider: openai
+
+# Schvalování příkazů
+# - suggest: Codex navrhne příkaz, student potvrdí
+# - auto-edit: automaticky upravuje soubory, příkazy potvrzuje
+# - full-auto: vše automaticky (NEPOUŽÍVAT u začátečníků!)
+approval: suggest
+
+# Výstupní formát
+# - stream: průběžný výstup (doporučeno pro interaktivní sezení)
+# - full: celý výstup najednou
+output: stream
+
+# Kontext projektu – Codex načte AGENTS.md automaticky
+# Zajisti, že AGENTS.md je v kořeni projektu
+
+# Maximální počet tokenů na odpověď
+# max_tokens: 4096
+
+# Prostředí – env proměnné dostupné agentovi
+# Nastav před spuštěním:
+# export OPENAI_API_KEY=sk-...
+
+# Příklady použití:
+#
+# Jednoduché dotazy:
+#   codex "vysvětli co dělá tato funkce" exercises/rekurze_cviceni.py
+#
+# Kontrola cvičení:
+#   codex "zkontroluj řešení a spusť testy" exercises/funkce_cviceni.py
+#
+# Generování cvičení (interaktivně):
+#   codex
+#   > Vygeneruj 3 cvičení na téma list comprehensions
+#
+# Quiet mód (bez interakce):
+#   codex -q "oprav syntax error v" exercises/cykly_cviceni.py

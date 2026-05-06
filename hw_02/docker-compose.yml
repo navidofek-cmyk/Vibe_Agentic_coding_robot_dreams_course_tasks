@@ -1,0 +1,48 @@
+services:
+
+  # ── Claude Code ────────────────────────────────────────────────
+  claude:
+    build: .
+    image: python-learning-assistant
+    container_name: pla-claude
+    stdin_open: true          # docker run -i
+    tty: true                 # docker run -t
+    command: claude
+    environment:
+      - ANTHROPIC_API_KEY=${ANTHROPIC_API_KEY}
+      - GITHUB_TOKEN=${GITHUB_TOKEN:-}
+      - BRAVE_API_KEY=${BRAVE_API_KEY:-}
+    volumes:
+      # Projekt studenta – sdílený mezi hostem a kontejnerem
+      - ./workspace:/workspace
+      # Persistentní paměť Claude (history, memory)
+      - claude-config:/root/.claude
+    working_dir: /workspace
+
+  # ── Codex CLI ──────────────────────────────────────────────────
+  codex:
+    build: .
+    image: python-learning-assistant
+    container_name: pla-codex
+    stdin_open: true
+    tty: true
+    command: codex
+    environment:
+      - OPENAI_API_KEY=${OPENAI_API_KEY}
+    volumes:
+      - ./workspace:/workspace
+    working_dir: /workspace
+
+  # ── Testovací runner (bez agenta, jen pytest) ──────────────────
+  tests:
+    build: .
+    image: python-learning-assistant
+    container_name: pla-tests
+    command: pytest /workspace/tests -v --tb=short
+    volumes:
+      - ./workspace:/workspace
+    working_dir: /workspace
+
+volumes:
+  claude-config:
+    name: pla-claude-config

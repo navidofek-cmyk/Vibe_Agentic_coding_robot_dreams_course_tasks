@@ -1,0 +1,24 @@
+# API klíče – NIKDY nekomitnout
+.env
+
+# Historie chatu – osobní, nepatří do repozitáře
+chat_history/
+
+# Lokální obsah studenta (vygenerované soubory, ne ukázky)
+workspace/lessons/
+workspace/exercises/*.py
+!workspace/exercises/ukazka_cviceni.py
+
+# Python
+__pycache__/
+*.pyc
+*.pyo
+.pytest_cache/
+
+# Node
+node_modules/
+
+# Editor
+.vscode/
+.idea/
+*.swp
