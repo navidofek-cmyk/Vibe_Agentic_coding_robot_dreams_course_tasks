@@ -24,10 +24,12 @@ Uživatel zadá soubor
    │            │              │
 [Security     [Quality]     [Tests]     ← 3 větve paralelně
   Swarm]        Agent         Agent       asyncio.gather()
+   │             │ (+ MCP)
+   │             └── analyze_code_structure (AST, in-process MCP server)
    │
    ├── [SQLInjectionChecker]   ┐
    ├── [SecretsChecker]        │
-   ├── [DeserializationChecker]├── Swarm (5 checkerů paralelně,
+   ├── [DeserializationChecker]├── Swarm (5 checkerů, stagger 1.5 s,
    ├── [PathTraversalChecker]  │        bez vzájemné koordinace)
    └── [AuthChecker]           ┘
    │            │              │
@@ -46,8 +48,8 @@ Uživatel zadá soubor
 ### Security Sub-Swarm (`security_swarm.py`)
 5 specializovaných checkerů — každý jako `AgentDefinition`, každý hledá jeden typ zranitelnosti:
 
-| Checker | `AgentDefinition` | Hledá |
-|---------|------------------|-------|
+| Checker | System prompt | Hledá |
+|---------|--------------|-------|
 | `_SQL_AGENT` | `_SQL_SYSTEM` | f-stringy, %-formát, `.format()` v SQL dotazech |
 | `_SECRETS_AGENT` | `_SECRETS_SYSTEM` | hardcoded hesla, API klíče, tokeny |
 | `_DESERIALIZATION_AGENT` | `_DESERIALIZATION_SYSTEM` | pickle.loads(), yaml.load() bez SafeLoader |
@@ -55,26 +57,28 @@ Uživatel zadá soubor
 | `_AUTH_AGENT` | `_AUTH_SYSTEM` | MD5/SHA1 pro hesla, chybějící autorizace |
 
 ### QualityAgent (`supervisor.py` — `_QUALITY_AGENT`)
-Kontroluje kódovou kvalitu podle Python best practices:
-- **Architektura:** SRP, DRY, God object, tight coupling, hardcoded závislosti
-- **Složitost:** funkce >5 parametrů, hluboké zanořování, magická čísla
-- **Ošetření chyb:** holé except:, tiché spolknutí výjimky, nechráněné zdroje
-- **Typová bezpečnost:** chybějící type hints, nevhodné Any
-- **Dokumentace:** chybějící docstrings, zastaralé komentáře
-- **Pythonic kód:** nepoužití enumerate/zip, context managerů, comprehensions
+Kontroluje kódovou kvalitu podle Python best practices. Před analýzou volá
+`mcp__code_analysis__analyze_code_structure` (AST metadata souboru).
 
 ### TestsAgent (`supervisor.py` — `_TESTS_AGENT`)
-Navrhuje pytest testy pro každou funkci/třídu:
-- Happy path, edge cases, hraniční hodnoty, error cases
-- Security regresní testy (dokumentují bugy — označeny `# REGRESNÍ TEST — BUG`)
-- Konkrétní spustitelný pytest kód s fixtures a mock patchy
-- Prioritizovaná tabulka: funkce × počet testů × priorita
+Navrhuje pytest testy pro každou funkci/třídu včetně security regresních testů
+označených `# REGRESNÍ TEST — BUG`.
 
 ### Supervisor (`supervisor.py` — `_SUPERVISOR_AGENT`)
-Syntetizuje výsledky všech tří agentů:
-- Deduplikuje překrývající se nálezy
-- Sestaví prioritizovaný akční plán (🔴 okamžitě / 🟠 tento sprint / 🟡 backlog)
-- Dimenzionální hodnocení: Bezpečnost / Kvalita / Testovatelnost / Čitelnost (1–10)
+Syntetizuje výsledky všech tří agentů — deduplikuje, prioritizuje, hodnotí (1–10).
+
+## Kde žijí instrukce agentů
+
+**`system_prompt`** — string konstanta v Pythonu (`_QUALITY_SYSTEM`, `_SQL_SYSTEM` atd.).
+Agent ji dostane vždy při každém spuštění, bez výjimky.
+
+**`docs/skills/`** — SKILL.md soubory se stejným obsahem jako referenční dokumentace.
+Kód je nepoužívá — jsou tam pro přehlednost a jako základ pro případný budoucí refaktor.
+
+Poznatky ze zkoušení `skills=` parametru v `ClaudeAgentOptions`:
+- Agent skill zavolá autonomně jen pokud ho potřebuje
+- Pokud má plný `system_prompt`, skill typicky ignoruje (Quality Agent ho nikdy nezavolal)
+- Tests Agent skill zavolal — jeho instrukce jsou více "domain knowledge" povahy
 
 ## Klíčový kód
 
@@ -90,55 +94,19 @@ _QUALITY_AGENT = AgentDefinition(
 )
 ```
 
-### Všechny parametry ClaudeAgentOptions
-
-| Parametr | Typ | Popis | V projektu | Možné využití |
-|---|---|---|---|---|
-| `system_prompt` | `str` | System prompt agenta | ✅ | — |
-| `allowed_tools` | `list[str]` | Nástroje povolené bez promptu | ✅ `["Read"]` nebo `[]` | — |
-| `model` | `str` | Model (např. `"claude-sonnet-4-6"`) | ✅ | — |
-| `max_turns` | `int` | Max počet otáček konverzace | ✅ 1 / 3 / 5 | — |
-| `cwd` | `str\|Path` | Pracovní adresář subprocesu | ✅ | — |
-| `permission_mode` | `str` | `acceptEdits / default / bypassPermissions / plan / dontAsk` | ✅ `acceptEdits` | — |
-| `env` | `dict[str,str]` | Env proměnné pro subprocess (API klíč) | ✅ | — |
-| `effort` | `str` | `low / medium / high / max` — hloubka přemýšlení (default: `high`) | ❌ | checkers `low`, supervisor `high` |
-| `max_budget_usd` | `float` | Strop nákladů v USD na jedno volání | ❌ | ochrana před drahým runem |
-| `thinking` | `dict` | Extended thinking: `adaptive / enabled / disabled` | ❌ | hlubší analýza u supervisora |
-| `output_format` | `dict` | Strukturovaný JSON výstup (schema) | ❌ | supervisor vrací JSON místo Markdown |
-| `betas` | `list[str]` | Beta funkce — `"context-1m-2025-08-07"` pro 1M token context | ❌ | review velkých souborů (>200K tokenů) |
-| `fallback_model` | `str` | Záložní model pokud hlavní selže | ❌ | resilience při výpadku modelu |
-| `tools` | `list[str]` | Základní sada nástrojů (alternativa k `allowed_tools`) | ❌ | — |
-| `disallowed_tools` | `list[str]` | Nástroje explicitně zakázané | ❌ | — |
-| `agents` | `dict` | Programaticky definované subagenty přístupné přes Agent tool | ❌ | alternativa ke swarm logice v `security_swarm.py` |
-| `hooks` | `dict` | Callbacky na události (PreToolUse, PostToolUse, ...) | ❌ | logování každého `Read` volání agenta |
-| `can_use_tool` | `Callable` | Custom handler pro povolení nástrojů | ❌ | omezit agenta aby četl jen reviewovaný soubor |
-| `sandbox` | `SandboxSettings` | Izolace filesystému a sítě | ❌ | bezpečnější spuštění agentů v produkci |
-| `skills` | `list[str]` | SKILL.md soubory s custom instrukcemi pro agenta | ❌ | nahradit system prompty externími SKILL.md soubory |
-| `mcp_servers` | `dict` | MCP servery s custom nástroji | ❌ | přidat nástroje `GitBlame`, `LintCheck`, `SastScan` |
-| `task_budget` | `TaskBudget` | Token budget pro model | ❌ | limit tokenů na checker |
-| `session_store` | `SessionStore` | Ukládání transkriptů externě | ❌ | audit log všech agentních volání |
-| `enable_file_checkpointing` | `bool` | Možnost rewindu souborů | ❌ | — |
-| `stderr` | `Callable` | Callback pro debug výstup subprocesu | ❌ | debug logování při vývoji |
-| `extra_args` | `dict` | Raw CLI argumenty navíc | ❌ | — |
-
-### SDK použití — ClaudeSDKClient
+### SDK použití — ClaudeSDKClient s logováním tool volání
 ```python
-from claude_agent_sdk import AgentDefinition, AssistantMessage, ClaudeAgentOptions, ClaudeSDKClient, TextBlock
-
-def _sdk_env() -> dict[str, str]:
-    env = {}
-    api_key = os.environ.get("ANTHROPIC_API_KEY")
-    if api_key:
-        env["ANTHROPIC_API_KEY"] = api_key
-    return env
+from claude_agent_sdk import AssistantMessage, ClaudeAgentOptions, ClaudeSDKClient, ResultMessage, TextBlock, ToolUseBlock
 
 options = ClaudeAgentOptions(
     system_prompt=agent_def.prompt,
     allowed_tools=agent_def.tools or [],
+    mcp_servers=mcp_servers or {},
     max_turns=5,
     model=agent_def.model,
     cwd=cwd,
     permission_mode="acceptEdits",
+    max_budget_usd=MAX_BUDGET_PER_AGENT_USD,
     env=_sdk_env(),
 )
 parts: list[str] = []
@@ -149,35 +117,73 @@ async with ClaudeSDKClient(options=options) as client:
             for block in message.content:
                 if isinstance(block, TextBlock):
                     parts.append(block.text)
+                elif isinstance(block, ToolUseBlock):
+                    print(f"   🔧 {name}: {block.name}({list(block.input.keys())})")
+        elif isinstance(message, ResultMessage):
+            if message.total_cost_usd and message.total_cost_usd > 0:
+                print(f"   💰 {name}: ${message.total_cost_usd:.4f} ({message.duration_ms}ms)")
 ```
 
-### Paralelní spuštění — asyncio.gather()
+### MCP server — in-process nástroj pro Quality Agenta
+```python
+from claude_agent_sdk import create_sdk_mcp_server, tool
+
+@tool("analyze_code_structure", "popis", {"file_path": str})
+async def analyze_code_structure(args: dict) -> dict:
+    return await _analyze_impl(args)   # implementace v _analyze_impl() — testovatelná přímo
+
+CODE_ANALYSIS_SERVER = create_sdk_mcp_server(
+    name="code_analysis", version="1.0.0", tools=[analyze_code_structure]
+)
+MCP_TOOL_NAME = "mcp__code_analysis__analyze_code_structure"
+```
+
+Pozor: `@tool` dekorátor vrací `SdkMcpTool` objekt (ne callable) — pro testy je implementace
+extrahována do `_analyze_impl()` a testuje se přímo bez MCP wrapperu.
+
+### Paralelní spuštění — asyncio.gather() s error handling
 ```python
 # Vrstva 2: 3 větve paralelně
-security_task = asyncio.create_task(run_security_swarm(task, cwd))
-quality_task  = asyncio.create_task(_run_agent("quality", _QUALITY_AGENT, task, cwd))
-tests_task    = asyncio.create_task(_run_agent("tests",   _TESTS_AGENT,   task, cwd))
-
-security, quality, tests = await asyncio.gather(
-    security_task, quality_task, tests_task
+raw = await asyncio.gather(
+    security_task, quality_task, tests_task,
+    return_exceptions=True,            # jeden selhavší agent neshodí celý review
+)
+security, quality, tests = (
+    r if isinstance(r, str) else f"[chyba agenta: {r}]"
+    for r in raw
 )
 
-# Vrstva 3 (uvnitř security_swarm.py): 5 checkerů paralelně
+# Vrstva 3 (uvnitř security_swarm.py): 5 checkerů paralelně se staggerem
+async def _staggered(i: int, name: str, agent_def: AgentDefinition) -> str:
+    if i > 0:
+        await asyncio.sleep(i * SWARM_STAGGER_SECONDS)   # všechny tasky vzniknou najednou
+    return await _run_checker(name, agent_def, task, cwd)
+
 checker_tasks = [
-    asyncio.create_task(_run_checker(name, agent_def, task, cwd))
-    for name, agent_def in CHECKERS.items()
+    asyncio.create_task(_staggered(i, name, agent_def))
+    for i, (name, agent_def) in enumerate(CHECKERS.items())
 ]
-results = await asyncio.gather(*checker_tasks)
+raw = await asyncio.gather(*checker_tasks, return_exceptions=True)
+```
+
+### Truncation vstupu supervisoru
+```python
+MAX_SECTION_CHARS = 12_000   # max délka výstupu jednoho agenta
+
+def _truncate(text: str, limit: int = MAX_SECTION_CHARS) -> str:
+    if len(text) <= limit:
+        return text
+    return text[:limit] + f"\n\n... [zkráceno — původní délka: {len(text)} znaků]"
 ```
 
 ### Předání výsledků Supervisorovi
-Sub-agenti vrací plain text. Supervisor je dostane jako sekce vložené přímo do promptu:
+Sub-agenti vrací plain text. Supervisor dostane zkrácené sekce vložené do promptu:
 ```python
 prompt = (
     f"{task}\n\n"
-    "## Bezpečnostní analýza\n" + findings['security'] + "\n\n"
-    "## Analýza kvality kódu\n" + findings['quality'] + "\n\n"
-    "## Analýza testovacího pokrytí\n" + findings['tests'] + "\n\n"
+    "## Bezpečnostní analýza\n" + _truncate(findings['security']) + "\n\n"
+    "## Analýza kvality kódu\n" + _truncate(findings['quality']) + "\n\n"
+    "## Analýza testovacího pokrytí\n" + _truncate(findings['tests']) + "\n\n"
     "Vytvoř finální Markdown report."
 )
 ```
@@ -187,25 +193,30 @@ prompt = (
 ```
 project/
 ├── src/code_reviewer/
-│   ├── __init__.py          — package marker
+│   ├── __init__.py          — sdk_env() helper (sdílená funkce pro oba moduly)
 │   ├── __main__.py          — CLI, načte .env, zavolá supervisor, uloží report
-│   ├── supervisor.py        — _sdk_env(), _run_agent(), _run_supervisor(),
+│   ├── supervisor.py        — _run_agent(), _run_supervisor(), _truncate(),
 │   │                          CodeReviewSupervisor, AgentDefinition konstanty,
 │   │                          3× system prompt (_QUALITY, _TESTS, _SUPERVISOR)
-│   └── security_swarm.py   — run_security_swarm(), _run_checker(),
-│                              5× AgentDefinition checker + system prompt
+│   ├── security_swarm.py   — run_security_swarm(), _run_checker(),
+│   │                          5× AgentDefinition checker + system prompt
+│   └── mcp_tools.py        — _analyze_impl(), @tool analyze_code_structure,
+│                              CODE_ANALYSIS_SERVER, MCP_TOOL_NAME
 ├── tests/
-│   ├── test_supervisor.py   — TestCodeReviewSupervisorInit, TestExamplesExist,
-│   │                          TestRunAgentMocked, TestSupervisorMocked,
-│   │                          test_full_review_integration (marker: integration)
-│   └── test_security_swarm.py — TestSwarmStructure, TestRunChecker,
-│                                 TestRunSecuritySwarm
+│   ├── test_supervisor.py   — unit + integrační testy (marker: integration)
+│   ├── test_security_swarm.py — testy swarm struktury a agregace
+│   └── test_mcp_tools.py   — testy _analyze_impl() (11 testů, bez MCP wrapperu)
 ├── examples/
-│   └── buggy_app.py         — demo soubor s úmyslnými chybami:
-│                              SQL injection ×4, hardcoded secrets, pickle RCE,
-│                              path traversal, MD5, funkce s 10 parametry
-├── chat_history/
-│   └── session_2026-05-04.md — záznam celé konverzace při vývoji
+│   ├── buggy_app.py         — jednoduchý demo soubor (89 řádků)
+│   │                          SQL injection ×4, secrets, pickle, path traversal, MD5
+│   └── buggy_api.py         — FastAPI e-shop demo (320 řádků)
+│                              SQL injection ×13, RCE ×2, command injection ×3,
+│                              hardcoded Stripe live key, PCI DSS violation
+├── docs/skills/             — SKILL.md referenční dokumentace (kód je nepoužívá)
+│   ├── quality-reviewer/SKILL.md
+│   ├── tests-reviewer/SKILL.md
+│   └── security-*/SKILL.md  (5 souborů)
+├── chat_history/            — záznamy konverzací (gitignored)
 ├── README.md
 ├── CLAUDE.md                — tento soubor
 ├── pyproject.toml
@@ -219,10 +230,13 @@ project/
 # Review souboru
 uv run code-reviewer cesta/k/souboru.py
 
-# Demo
+# Demo — jednoduchý soubor
 uv run code-reviewer examples/buggy_app.py
 
-# Testy bez API (21 testů)
+# Demo — FastAPI backend (složitější, ~$1.30, ~10 min)
+uv run code-reviewer examples/buggy_api.py
+
+# Testy bez API (32 testů)
 uv run pytest tests/ -k "not integration"
 
 # Integrační test s reálným API
@@ -236,13 +250,41 @@ V `.env`:
 ANTHROPIC_API_KEY=sk-ant-...
 ```
 Načte se přes `python-dotenv` v `__main__.py` a předá se do každého `ClaudeAgentOptions`
-přes parametr `env=_sdk_env()`. Soubor `.env` je v `.gitignore`.
+přes parametr `env=sdk_env()` z `__init__.py`.
 
 ## Konvence pro rozšíření
 
-- **Nový sub-agent (vrstva 2):** přidej `AgentDefinition` konstantu v `supervisor.py` → `asyncio.create_task(_run_agent("xxx", _XXX_AGENT, ...))` → přidej do `gather()` → předej výsledek do `_run_supervisor()`
-- **Nový security checker (vrstva 3):** přidej `_XXX_SYSTEM` konstantu + `AgentDefinition` v `security_swarm.py` → přidej do `CHECKERS`
+- **Nový sub-agent (vrstva 2):** přidej `AgentDefinition` + `_XXX_SYSTEM` v `supervisor.py` → `asyncio.create_task(_run_agent(...))` → přidej do `gather()` → předej do `_run_supervisor()`
+- **Nový security checker (vrstva 3):** přidej `_XXX_SYSTEM` + `AgentDefinition` v `security_swarm.py` → přidej do `CHECKERS`
 - **System prompty** drž jako konstanty ve stejném souboru jako `AgentDefinition`
 - **Sub-agenti mají jen `["Read"]`** — nesmí modifikovat soubory
 - **Supervisor nemá nástroje** — `allowed_tools=[]`, jen syntetizuje text
 - **Supervisor nepíše soubory** — to dělá `__main__.py`
+
+## Všechny parametry ClaudeAgentOptions
+
+| Parametr | Typ | V projektu | Možné využití |
+|---|---|---|---|
+| `system_prompt` | `str` | ✅ | — |
+| `allowed_tools` | `list[str]` | ✅ `["Read"]` nebo `[]` | — |
+| `model` | `str` | ✅ `"claude-sonnet-4-6"` | — |
+| `max_turns` | `int` | ✅ 1 / 3 / 5 | — |
+| `cwd` | `str\|Path` | ✅ | — |
+| `permission_mode` | `str` | ✅ `acceptEdits` | — |
+| `env` | `dict[str,str]` | ✅ API klíč | — |
+| `max_budget_usd` | `float` | ✅ 0.15 / 0.25 / 0.35 | — |
+| `mcp_servers` | `dict` | ✅ Quality Agent | přidat `GitBlame`, `LintCheck` |
+| `effort` | `str` | ❌ | checkers `low`, supervisor `high` |
+| `thinking` | `dict` | ❌ | hlubší analýza u supervisora |
+| `output_format` | `dict` | ❌ | supervisor vrací JSON místo Markdown |
+| `betas` | `list[str]` | ❌ | review velkých souborů (>200K tokenů) |
+| `fallback_model` | `str` | ❌ | resilience při výpadku modelu |
+| `skills` | `list[str]` | ❌ (zkoušeno — viz docs/skills/) | agent je ignoruje pokud má plný system_prompt |
+| `agents` | `dict` | ❌ | alternativa ke swarm logice |
+| `hooks` | `dict` | ❌ | logování tool volání (alternativa k ToolUseBlock) |
+| `can_use_tool` | `Callable` | ❌ | omezit agenta aby četl jen reviewovaný soubor |
+| `sandbox` | `SandboxSettings` | ❌ | bezpečnější spuštění v produkci |
+| `task_budget` | `TaskBudget` | ❌ | limit tokenů na checker |
+| `session_store` | `SessionStore` | ❌ | audit log agentních volání |
+| `setting_sources` | `list[str]` | ❌ | načíst skills/settings z projektu |
+| `stderr` | `Callable` | ❌ | debug logování při vývoji |
