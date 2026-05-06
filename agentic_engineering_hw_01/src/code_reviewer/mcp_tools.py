@@ -14,17 +14,8 @@ from typing import Any
 from claude_agent_sdk import create_sdk_mcp_server, tool
 
 
-@tool(
-    "analyze_code_structure",
-    (
-        "Analyzuje strukturu Python souboru pomocí AST. "
-        "Vrátí počty funkcí, tříd, metod, importů, řádků kódu a seznam všech "
-        "definovaných funkcí/tříd — užitečné jako kontext před manuální revizí."
-    ),
-    {"file_path": str},
-)
-async def analyze_code_structure(args: dict[str, Any]) -> dict[str, Any]:
-    """Strukturální analýza Python souboru přes ast modul."""
+async def _analyze_impl(args: dict[str, Any]) -> dict[str, Any]:
+    """Implementace AST analýzy — testovatelná bez MCP wrapperu."""
     file_path = Path(args["file_path"])
 
     if not file_path.exists():
@@ -45,16 +36,23 @@ async def analyze_code_structure(args: dict[str, Any]) -> dict[str, Any]:
     methods: list[str] = []
     imports: list[str] = []
 
-    for node in ast.walk(tree):
+    # Top-level funkce a třídy (přímí potomci modulu)
+    for node in ast.iter_child_nodes(tree):
         if isinstance(node, ast.FunctionDef | ast.AsyncFunctionDef):
-            # Rozlišíme metody (parent je ClassDef) od volných funkcí
             functions.append(node.name)
         elif isinstance(node, ast.ClassDef):
             classes.append(node.name)
+
+    # Metody uvnitř tříd (libovolná hloubka zanoření)
+    for node in ast.walk(tree):
+        if isinstance(node, ast.ClassDef):
             for item in node.body:
                 if isinstance(item, ast.FunctionDef | ast.AsyncFunctionDef):
                     methods.append(f"{node.name}.{item.name}")
-        elif isinstance(node, ast.Import):
+
+    # Importy
+    for node in ast.walk(tree):
+        if isinstance(node, ast.Import):
             for alias in node.names:
                 imports.append(alias.name)
         elif isinstance(node, ast.ImportFrom):
@@ -74,6 +72,20 @@ async def analyze_code_structure(args: dict[str, Any]) -> dict[str, Any]:
     )
 
     return {"content": [{"type": "text", "text": report}]}
+
+
+@tool(
+    "analyze_code_structure",
+    (
+        "Analyzuje strukturu Python souboru pomocí AST. "
+        "Vrátí počty funkcí, tříd, metod, importů, řádků kódu a seznam všech "
+        "definovaných funkcí/tříd — užitečné jako kontext před manuální revizí."
+    ),
+    {"file_path": str},
+)
+async def analyze_code_structure(args: dict[str, Any]) -> dict[str, Any]:
+    """MCP wrapper kolem _analyze_impl — předán Claude Code CLI přes mcp_servers."""
+    return await _analyze_impl(args)
 
 
 # In-process MCP server — předán Quality Agentu přes ClaudeAgentOptions.mcp_servers

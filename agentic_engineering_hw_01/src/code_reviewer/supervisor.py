@@ -12,7 +12,6 @@ Architektura:
 from __future__ import annotations
 
 import asyncio
-import os
 from pathlib import Path
 
 from claude_agent_sdk import (
@@ -24,12 +23,14 @@ from claude_agent_sdk import (
     TextBlock,
 )
 
+from code_reviewer import sdk_env as _sdk_env
 from code_reviewer.mcp_tools import CODE_ANALYSIS_SERVER, MCP_TOOL_NAME
 from code_reviewer.security_swarm import CHECKERS as _SECURITY_CHECKERS, run_security_swarm
 
 MODEL = "claude-sonnet-4-6"
 MAX_BUDGET_PER_AGENT_USD = 0.25     # pojistka pro Quality a Tests agenty
 MAX_BUDGET_SUPERVISOR_USD = 0.35    # supervisor dostane větší vstup → vyšší limit
+MAX_SECTION_CHARS = 12_000          # max délka výstupu jednoho agenta předávaného supervisoru
 
 # ---------------------------------------------------------------------------
 # System prompty sub-agentů
@@ -300,15 +301,6 @@ _SUPERVISOR_AGENT = AgentDefinition(
 # Pomocné funkce
 # ---------------------------------------------------------------------------
 
-def _sdk_env() -> dict[str, str]:
-    """Předá ANTHROPIC_API_KEY z prostředí do Claude Code CLI subprocesu."""
-    env = {}
-    api_key = os.environ.get("ANTHROPIC_API_KEY")
-    if api_key:
-        env["ANTHROPIC_API_KEY"] = api_key
-    return env
-
-
 async def _run_agent(
     name: str,
     agent_def: AgentDefinition,
@@ -343,17 +335,23 @@ async def _run_agent(
     return "\n".join(parts) or f"[{name}: žádný výstup]"
 
 
+def _truncate(text: str, limit: int = MAX_SECTION_CHARS) -> str:
+    if len(text) <= limit:
+        return text
+    return text[:limit] + f"\n\n... [zkráceno — původní délka: {len(text)} znaků]"
+
+
 async def _run_supervisor(task: str, findings: dict[str, str]) -> str:
     """Supervisor syntetizuje výsledky všech sub-agentů do finálního reportu."""
     prompt = (
         f"{task}\n\n"
         "Níže jsou výsledky od specializovaných agentů:\n\n"
         "## Bezpečnostní analýza\n"
-        f"{findings['security']}\n\n"
+        f"{_truncate(findings['security'])}\n\n"
         "## Analýza kvality kódu\n"
-        f"{findings['quality']}\n\n"
+        f"{_truncate(findings['quality'])}\n\n"
         "## Analýza testovacího pokrytí\n"
-        f"{findings['tests']}\n\n"
+        f"{_truncate(findings['tests'])}\n\n"
         "Vytvoř finální Markdown report."
     )
     options = ClaudeAgentOptions(
@@ -430,8 +428,13 @@ class CodeReviewSupervisor:
         print("   🔬 Quality Agent   → spuštěn")
         print("   🧪 Tests Agent     → spuštěn")
 
-        security, quality, tests = await asyncio.gather(
-            security_task, quality_task, tests_task
+        raw = await asyncio.gather(
+            security_task, quality_task, tests_task,
+            return_exceptions=True,
+        )
+        security, quality, tests = (
+            r if isinstance(r, str) else f"[chyba agenta: {r}]"
+            for r in raw
         )
 
         print("\n✅ Všechny sub-agenty dokončeny")

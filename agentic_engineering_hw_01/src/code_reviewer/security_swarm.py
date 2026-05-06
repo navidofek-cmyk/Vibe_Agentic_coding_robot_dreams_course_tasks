@@ -8,7 +8,6 @@ Agenti nekomunikují navzájem — čistý Swarm bez koordinace.
 from __future__ import annotations
 
 import asyncio
-import os
 
 from claude_agent_sdk import (
     AgentDefinition,
@@ -18,6 +17,8 @@ from claude_agent_sdk import (
     ResultMessage,
     TextBlock,
 )
+
+from code_reviewer import sdk_env as _sdk_env
 
 MODEL = "claude-sonnet-4-6"
 MAX_BUDGET_PER_CHECKER_USD = 0.15   # pojistka na jedno API volání checkeru
@@ -197,14 +198,6 @@ CHECKERS: dict[str, AgentDefinition] = {
 # Swarm logika
 # ---------------------------------------------------------------------------
 
-def _sdk_env() -> dict[str, str]:
-    env = {}
-    api_key = os.environ.get("ANTHROPIC_API_KEY")
-    if api_key:
-        env["ANTHROPIC_API_KEY"] = api_key
-    return env
-
-
 async def _run_checker(name: str, agent_def: AgentDefinition, task: str, cwd: str) -> str:
     """Spustí jednoho security checkera a vrátí jeho výstup."""
     options = ClaudeAgentOptions(
@@ -235,15 +228,24 @@ async def run_security_swarm(task: str, cwd: str) -> str:
     """
     Spustí všechny security checkery jako Swarm — paralelně, bez vzájemné koordinace.
     Každý checker autonomně analyzuje jeden typ zranitelnosti.
-    Checkery jsou staggeovány (SWARM_STAGGER_SECONDS) aby se snížil rate limiting.
+    Tasky vznikají najednou; každý si sám zdržuje start o i * SWARM_STAGGER_SECONDS
+    aby se snížil rate limiting při souběžném spuštění.
     Vrátí agregovaný text se sekcí pro každý checker.
     """
-    checker_tasks = []
-    for i, (name, agent_def) in enumerate(CHECKERS.items()):
+    async def _staggered(i: int, name: str, agent_def: AgentDefinition) -> str:
         if i > 0:
-            await asyncio.sleep(SWARM_STAGGER_SECONDS)
-        checker_tasks.append(asyncio.create_task(_run_checker(name, agent_def, task, cwd)))
-    results = await asyncio.gather(*checker_tasks)
+            await asyncio.sleep(i * SWARM_STAGGER_SECONDS)
+        return await _run_checker(name, agent_def, task, cwd)
+
+    checker_tasks = [
+        asyncio.create_task(_staggered(i, name, agent_def))
+        for i, (name, agent_def) in enumerate(CHECKERS.items())
+    ]
+    raw = await asyncio.gather(*checker_tasks, return_exceptions=True)
+    results = [
+        r if isinstance(r, str) else f"[chyba checkeru: {r}]"
+        for r in raw
+    ]
 
     sections = [
         f"#### {name}\n{result}"
