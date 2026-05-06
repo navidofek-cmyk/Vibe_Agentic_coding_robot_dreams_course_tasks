@@ -3,40 +3,6 @@
 Multi-agent systém postavený na **Claude Agent SDK**, který provede automatizované
 code review Python souboru a vygeneruje přehledný Markdown report.
 
-## Zadání / Assignment
-
-> **Vytvořte projekt s praktickým použitím SDK pro kódovacích agentů. Cílem je, aby projekt demonstroval libovolnou orchestraci, tzn. workflow nebo multi-agent, a zároveň měl praktické použití.**
->
-> Kódovací agenti: Codex / **Claude Code** ← zvoleno
->
-> Multi-agent: Collaboration / **Supervisor** / **Swarm** ← zvoleno (oba)
->
-> Formát: odkaz na GitHub | Deadline: 8. 5. 2026 | Max bodů: 100
-
-## Úkolové shrnutí / Assignment Mapping
-
-Tento projekt je řešením úkolu z kurzu Agentic Engineering / Vibe Coding.
-
-### Splnění požadavků
-
-- **Kódovací agent:** projekt používá Claude Agent SDK a `ClaudeSDKClient`
-- **Sub-agenti:** systém obsahuje Security Swarm, Quality Agent, Tests Agent a Supervisor
-- **Skills:** agenti reprezentují specializované schopnosti:
-  - security analysis (5 checkerů: SQL injection, secrets, deserializace, path traversal, auth)
-  - code quality review
-  - test generation
-  - report synthesis
-- **Multi-agent pattern:** projekt demonstruje dva patterny:
-  - Supervisor pattern (vrstva 1)
-  - Swarm pattern (vrstva 3 — Security Sub-Swarm)
-- **Praktické použití:** automatizované code review Python souboru přes CLI
-
-### MCP
-
-Projekt obsahuje in-process MCP server (`create_sdk_mcp_server` z Claude Agent SDK) s nástrojem `analyze_code_structure` — provádí AST analýzu Python souboru a předává výsledky Quality Agentovi jako kontext před jeho vlastní analýzou. Není to externí MCP server; tooling je řešen přímo v kódu přes `@tool` dekorátor.
-
----
-
 ## Co to dělá
 
 Zadáš soubor → tři AI agenti ho paralelně zkontrolují → dostaneš report.
@@ -208,6 +174,18 @@ uv run pytest tests/ -m integration
 - **Paralelismus** — `asyncio.gather()` pro souběžné sub-agenty
 - **API klíč** — předáván přes `env={"ANTHROPIC_API_KEY": ...}` v `ClaudeAgentOptions`
 - **Python** 3.10+, `uv` pro správu závislostí
+
+## Poznámky k architektuře
+
+### Skills vs. system_prompt
+
+Každý agent má zároveň `system_prompt` (Python string konstanta) i odpovídající `.claude/skills/<name>/SKILL.md` soubor s totožným obsahem.
+
+Tato redundance je záměrná:
+- `system_prompt` — agent dostane instrukce **vždy**, bez ohledu na to zda skill zavolá
+- `SKILL.md` — agent skill zavolá jen pokud ho potřebuje; při plném `system_prompt` ho typicky ignoruje
+
+Pokud by se `system_prompt` zredukoval na jednu větu, agent by byl nucen skill volat a instrukce by žily pouze v SKILL.md souborech — jednodušší údržba, ale méně předvídatelné chování.
 
 ## Kontext
 
