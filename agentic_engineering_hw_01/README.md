@@ -177,15 +177,11 @@ uv run pytest tests/ -m integration
 
 ## Poznámky k architektuře
 
-### Skills vs. system_prompt
+### Kde žijí instrukce agentů
 
-Každý agent má zároveň `system_prompt` (Python string konstanta) i odpovídající `.claude/skills/<name>/SKILL.md` soubor s totožným obsahem.
+Každý agent je řízen `system_prompt` — string konstanta přímo v Pythonu (`supervisor.py`, `security_swarm.py`). Agent ji dostane vždy při každém spuštění.
 
-Tato redundance je záměrná:
-- `system_prompt` — agent dostane instrukce **vždy**, bez ohledu na to zda skill zavolá
-- `SKILL.md` — agent skill zavolá jen pokud ho potřebuje; při plném `system_prompt` ho typicky ignoruje
-
-Pokud by se `system_prompt` zredukoval na jednu větu, agent by byl nucen skill volat a instrukce by žily pouze v SKILL.md souborech — jednodušší údržba, ale méně předvídatelné chování.
+V `docs/skills/` jsou SKILL.md soubory se stejným obsahem jako referenční dokumentace. Kód je nepoužívá — jsou tam pro přehlednost a jako základ pro případný budoucí refaktor (přesun instrukci z kódu do externích souborů).
 
 ## Kontext
 

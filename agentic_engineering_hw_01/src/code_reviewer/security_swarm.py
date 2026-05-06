@@ -153,7 +153,6 @@ _SQL_AGENT = AgentDefinition(
     description="SQL injection specialist — hledá f-stringy, %-formát a .format() v SQL dotazech",
     prompt=_SQL_SYSTEM,
     tools=["Read"],
-    skills=["security-sql"],
     model=MODEL,
 )
 
@@ -161,7 +160,6 @@ _SECRETS_AGENT = AgentDefinition(
     description="Secrets specialist — hledá hardcoded hesla, API klíče a connection stringy",
     prompt=_SECRETS_SYSTEM,
     tools=["Read"],
-    skills=["security-secrets"],
     model=MODEL,
 )
 
@@ -169,7 +167,6 @@ _DESERIALIZATION_AGENT = AgentDefinition(
     description="Deserialization specialist — hledá pickle.loads(), yaml.load() bez SafeLoader",
     prompt=_DESERIALIZATION_SYSTEM,
     tools=["Read"],
-    skills=["security-deserialization"],
     model=MODEL,
 )
 
@@ -177,7 +174,6 @@ _PATH_TRAVERSAL_AGENT = AgentDefinition(
     description="Path traversal specialist — hledá open() s uživatelským vstupem bez normalizace cesty",
     prompt=_PATH_TRAVERSAL_SYSTEM,
     tools=["Read"],
-    skills=["security-path-traversal"],
     model=MODEL,
 )
 
@@ -185,7 +181,6 @@ _AUTH_AGENT = AgentDefinition(
     description="Auth specialist — hledá slabé hashování hesel (MD5/SHA1) a chybějící autorizaci",
     prompt=_AUTH_SYSTEM,
     tools=["Read"],
-    skills=["security-auth"],
     model=MODEL,
 )
 
@@ -207,14 +202,12 @@ async def _run_checker(name: str, agent_def: AgentDefinition, task: str, cwd: st
     """Spustí jednoho security checkera a vrátí jeho výstup."""
     options = ClaudeAgentOptions(
         system_prompt=agent_def.prompt,
-        allowed_tools=(agent_def.tools or []) + (["Skill"] if agent_def.skills else []),
-        skills=agent_def.skills or None,
+        allowed_tools=agent_def.tools or [],
         max_turns=3,
         model=agent_def.model,
         cwd=cwd,
         permission_mode="acceptEdits",
         max_budget_usd=MAX_BUDGET_PER_CHECKER_USD,
-        setting_sources=["project"],
         env=_sdk_env(),
     )
     parts: list[str] = []

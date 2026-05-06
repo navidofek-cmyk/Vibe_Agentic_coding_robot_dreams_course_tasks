@@ -281,7 +281,6 @@ _QUALITY_AGENT = AgentDefinition(
     description="Senior Python inženýr kontrolující kvalitu kódu a best practices",
     prompt=_QUALITY_SYSTEM,
     tools=["Read"],
-    skills=["quality-reviewer"],
     model=MODEL,
 )
 
@@ -289,7 +288,6 @@ _TESTS_AGENT = AgentDefinition(
     description="Senior QA inženýr navrhující pytest testy pro každou funkci a třídu",
     prompt=_TESTS_SYSTEM,
     tools=["Read"],
-    skills=["tests-reviewer"],
     model=MODEL,
 )
 
@@ -316,15 +314,13 @@ async def _run_agent(
     """Spustí jednoho sub-agenta a vrátí jeho textový výstup."""
     options = ClaudeAgentOptions(
         system_prompt=agent_def.prompt,
-        allowed_tools=(agent_def.tools or []) + (extra_tools or []) + (["Skill"] if agent_def.skills else []),
-        skills=agent_def.skills or None,
+        allowed_tools=(agent_def.tools or []) + (extra_tools or []),
         mcp_servers=mcp_servers or {},
         max_turns=5,
         model=agent_def.model,
         cwd=cwd,
         permission_mode="acceptEdits",
         max_budget_usd=MAX_BUDGET_PER_AGENT_USD,
-        setting_sources=["project"],
         env=_sdk_env(),
     )
     parts: list[str] = []
