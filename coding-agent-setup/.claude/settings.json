@@ -33,10 +33,9 @@
       "description": "Webové vyhledávání přes Brave Search API"
     },
     "sqlite": {
-      "command": "npx",
+      "command": "uvx",
       "args": [
-        "-y",
-        "@modelcontextprotocol/server-sqlite",
+        "mcp-server-sqlite",
         "--db-path",
         "/home/user/projects/data/app.db"
       ],
@@ -65,12 +64,22 @@
       "Bash(git commit:*)",
       "Bash(python3:*)",
       "Bash(pytest:*)",
+      "Bash(python -m pytest:*)",
+      "Bash(python:*)",
       "Bash(pip:*)",
       "Bash(find:*)",
       "Bash(grep:*)",
       "Bash(ls:*)",
       "Bash(cat:*)",
-      "Bash(echo:*)"
+      "Bash(echo:*)",
+      "Bash(mkdir:*)",
+      "Bash(cp:*)",
+      "Bash(mv:*)",
+      "Bash(touch:*)",
+      "Bash(rm:*)",
+      "Bash(cd:*)",
+      "Write(*)",
+      "Edit(*)"
     ],
     "deny": [
       "Bash(rm -rf:*)",

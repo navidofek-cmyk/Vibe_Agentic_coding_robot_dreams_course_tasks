@@ -5,18 +5,19 @@ services:
     build: .
     image: python-learning-assistant
     container_name: pla-claude
-    stdin_open: true          # docker run -i
-    tty: true                 # docker run -t
+    stdin_open: true
+    tty: true
     command: claude
     environment:
-      - ANTHROPIC_API_KEY=${ANTHROPIC_API_KEY}
       - GITHUB_TOKEN=${GITHUB_TOKEN:-}
       - BRAVE_API_KEY=${BRAVE_API_KEY:-}
+      - CLAUDE_CODE_ENABLE_TELEMETRY=0
     volumes:
-      # Projekt studenta – sdílený mezi hostem a kontejnerem
       - ./workspace:/workspace
-      # Persistentní paměť Claude (history, memory)
-      - claude-config:/root/.claude
+      - ./.claude:/workspace/.claude:ro
+      - ./CLAUDE.md:/workspace/CLAUDE.md:ro
+      - ${HOME}/.claude:/root/.claude
+      - ${HOME}/.claude.json:/tmp/host-claude.json:ro
     working_dir: /workspace
 
   # ── Codex CLI ──────────────────────────────────────────────────
@@ -38,11 +39,28 @@ services:
     build: .
     image: python-learning-assistant
     container_name: pla-tests
-    command: pytest /workspace/tests -v --tb=short
+    command: pytest
     volumes:
       - ./workspace:/workspace
     working_dir: /workspace
 
-volumes:
-  claude-config:
-    name: pla-claude-config
+  # ── Debug – logy do workspace/debug.log ───────────────────────
+  debug:
+    build: .
+    image: python-learning-assistant
+    container_name: pla-debug
+    stdin_open: true
+    tty: true
+    stop_grace_period: 10s
+    command: debug
+    environment:
+      - GITHUB_TOKEN=${GITHUB_TOKEN:-}
+      - BRAVE_API_KEY=${BRAVE_API_KEY:-}
+      - CLAUDE_CODE_ENABLE_TELEMETRY=0
+    volumes:
+      - ./workspace:/workspace
+      - ./.claude:/workspace/.claude:ro
+      - ./CLAUDE.md:/workspace/CLAUDE.md:ro
+      - ${HOME}/.claude:/root/.claude
+      - ${HOME}/.claude.json:/tmp/host-claude.json:ro
+    working_dir: /workspace

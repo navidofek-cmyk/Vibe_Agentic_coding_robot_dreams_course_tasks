@@ -10,6 +10,10 @@ workspace/exercises/*.py
 !workspace/exercises/ukazka_cviceni.py
 !workspace/exercises/rekurze_cviceni.py
 
+# Debug a runtime soubory
+workspace/debug.log
+workspace/latest
+
 # Python
 __pycache__/
 *.pyc

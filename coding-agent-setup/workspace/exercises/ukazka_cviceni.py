@@ -5,10 +5,12 @@ Instrukce: Implementuj funkci fibonacci(n) která vrátí n-té Fibonacciho čí
 
 
 def fibonacci(n: int) -> int:
-    # TODO: Doplň implementaci
-    pass
+    if n <= 1:
+        return n
+    return fibonacci(n - 1) + fibonacci(n - 2)
 
 
 def faktorial(n: int) -> int:
-    # TODO: Doplň implementaci
-    pass
+    if n == 0:
+        return 1
+    return n * faktorial(n - 1)

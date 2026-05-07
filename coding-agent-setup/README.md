@@ -105,29 +105,89 @@ coding-agent-setup/
 ### Způsob A – Docker (doporučeno, bez instalace Node.js)
 
 ```bash
-# 1. Zkopíruj a vyplň API klíče
-cp .env.example .env
-# Otevři .env a vlož své klíče
+# 1. Přihlaš se do Claude Code (jednorázově, sdílí se s kontejnerem)
+claude login
 
 # 2. Sestav image
-docker compose build
+docker-compose build
 
-# 3. Spusť agenty
-docker compose run --rm claude       # Claude Code (interaktivní)
-docker compose run --rm codex        # Codex CLI (interaktivní)
-docker compose run --rm tests        # jen pytest bez agenta
+# 3. Spusť agenta
+docker-compose run --rm claude
 ```
 
 Tvoje soubory jsou v `workspace/` – sdílená složka mezi hostem a kontejnerem.
 
 ```bash
 # Jednorázové příkazy
-docker compose run --rm claude claude "/lesson rekurze"
-docker compose run --rm claude claude "/check exercises/ukazka_cviceni.py"
-docker compose run --rm codex  codex "vysvětli fibonacci"
+docker-compose run --rm claude claude "/lesson rekurze"
+docker-compose run --rm claude claude "/check exercises/ukazka_cviceni.py"
+
+# Testy bez agenta
+docker-compose run --rm tests
 
 # Bash shell uvnitř kontejneru
-docker compose run --rm claude bash
+docker-compose run --rm claude bash
+```
+
+### Simulace mentor↔student (ukázka multi-agentního workflow)
+
+Nejzajímavější funkce projektu – orchestrátor spustí **student agenta** a **mentor agenta**
+paralelně a jejich dialog je viditelný v reálném čase.
+
+**Terminál 1** – spusť Claude v debug módu:
+
+```bash
+docker-compose run --rm debug
+```
+
+Pak v Claude REPL zadej:
+
+```
+/simulate faktorial
+```
+
+**Terminál 2** – sleduj infrastrukturu pod kapotou:
+
+```bash
+./watch-debug.sh
+```
+
+Výstup v Terminálu 1 vypadá takto:
+
+```
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+👨‍🎓 STUDENT píše kód pro téma: faktorial
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+(student agent napíše kód s úmyslnou chybou)
+
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+🧪 MENTOR spouští testy
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+FAILED test_base_case – assert None == 1
+
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+🧑‍🏫 MENTOR reaguje
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+"Co si myslíš, co vrátí tvoje funkce pro n=0?"
+
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+👨‍🎓 STUDENT přemýšlí a opravuje
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+"Hmm, asi jsem zapomněl base case..."
+
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+🧪 FINÁLNÍ TESTY po opravě
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+PASSED 3/3 ✅
+```
+
+Terminál 2 (`watch-debug.sh`) zobrazí barevně co se děje pod kapotou:
+
+```
+[AGENT]  spawning student subagent
+[TOOL]   Write → workspace/exercises/simulate_cviceni.py
+[HOOK]   PostToolUse Edit → ruff check
+[SKILL]  Loaded 6 unique skills
 ```
 
 ### Způsob B – Lokální instalace
