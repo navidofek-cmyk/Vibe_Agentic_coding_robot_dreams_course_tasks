@@ -10,3 +10,4 @@ workspace/cases/*/log.*
 workspace/cases/*/VTK/
 data/
 *.db
+chat_history/
