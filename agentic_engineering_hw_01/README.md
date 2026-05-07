@@ -1,5 +1,8 @@
 # Code Review Supervisor
 
+> **HW Agentic Engineering – 1**
+> Implementace multi-agent systému s využitím Claude Agent SDK.
+
 Multi-agent systém postavený na **Claude Agent SDK**, který provede automatizované
 code review Python souboru a vygeneruje přehledný Markdown report.
 
