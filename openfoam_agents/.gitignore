@@ -1,0 +1,12 @@
+.env
+__pycache__/
+*.pyc
+*.pyo
+.pytest_cache/
+workspace/cases/*/[0-9]*/
+workspace/cases/*/processor*/
+workspace/cases/*/postProcessing/
+workspace/cases/*/log.*
+workspace/cases/*/VTK/
+data/
+*.db

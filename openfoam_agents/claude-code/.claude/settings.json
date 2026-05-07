@@ -1,0 +1,143 @@
+{
+  "mcpServers": {
+    "filesystem": {
+      "command": "npx",
+      "args": [
+        "-y",
+        "@modelcontextprotocol/server-filesystem",
+        "/home/user/projects/openfoam_agents"
+      ],
+      "env": {},
+      "description": "Přístup k OpenFOAM case souborům – 0/, constant/, system/"
+    },
+    "github": {
+      "command": "npx",
+      "args": [
+        "-y",
+        "@modelcontextprotocol/server-github"
+      ],
+      "env": {
+        "GITHUB_PERSONAL_ACCESS_TOKEN": "${GITHUB_TOKEN}"
+      },
+      "description": "GitHub integrace – sdílení výsledků, fork referenčních case souborů"
+    },
+    "brave-search": {
+      "command": "npx",
+      "args": [
+        "-y",
+        "@modelcontextprotocol/server-brave-search"
+      ],
+      "env": {
+        "BRAVE_API_KEY": "${BRAVE_API_KEY}"
+      },
+      "description": "Vyhledávání OpenFOAM dokumentace, CFD Stack Exchange, tutoriálů"
+    },
+    "sqlite": {
+      "command": "npx",
+      "args": [
+        "-y",
+        "@modelcontextprotocol/server-sqlite",
+        "--db-path",
+        "/home/user/projects/openfoam_agents/data/progress.db"
+      ],
+      "env": {},
+      "description": "Sledování pokroku studenta – simulace, počet pokusů, konvergence"
+    },
+    "memory": {
+      "command": "npx",
+      "args": [
+        "-y",
+        "@modelcontextprotocol/server-memory"
+      ],
+      "env": {},
+      "description": "Perzistentní paměť – kontext studentových chyb mezi sezeními"
+    }
+  },
+
+  "permissions": {
+    "allow": [
+      "Bash(npm:*)",
+      "Bash(npx:*)",
+      "Bash(git status)",
+      "Bash(git diff:*)",
+      "Bash(git log:*)",
+      "Bash(git add:*)",
+      "Bash(git commit:*)",
+      "Bash(python3:*)",
+      "Bash(pytest:*)",
+      "Bash(pip:*)",
+      "Bash(find:*)",
+      "Bash(grep:*)",
+      "Bash(ls:*)",
+      "Bash(cat:*)",
+      "Bash(blockMesh:*)",
+      "Bash(checkMesh:*)",
+      "Bash(foamRun:*)",
+      "Bash(icoFoam:*)",
+      "Bash(simpleFoam:*)",
+      "Bash(postProcess:*)",
+      "Bash(foamToVTK:*)",
+      "Bash(reconstructPar:*)",
+      "Bash(docker:*)"
+    ],
+    "deny": [
+      "Bash(rm -rf:*)",
+      "Bash(git push --force:*)",
+      "Bash(sudo:*)"
+    ]
+  },
+
+  "hooks": {
+    "PreToolUse": [
+      {
+        "matcher": "Bash",
+        "hooks": [
+          {
+            "type": "command",
+            "command": "echo '[Hook] Spouštím příkaz – loguji pro studenta...' >&2"
+          }
+        ]
+      }
+    ],
+    "PostToolUse": [
+      {
+        "matcher": "Edit|Write",
+        "hooks": [
+          {
+            "type": "command",
+            "command": "echo '[Hook] Soubor upraven. Kontroluji OpenFOAM syntaxi...' >&2 && (python3 -c \"import sys; f=open('$CLAUDE_TOOL_RESULT_FILE_PATH'); content=f.read(); errors=[]; [errors.append(f'line {i+1}: chybí středník') for i,l in enumerate(content.split('\\n')) if l.strip() and not l.strip().startswith('//') and not l.strip().startswith('/*') and not l.strip().startswith('*') and not l.strip().endswith('{') and not l.strip().endswith('}') and not l.strip().endswith(';') and not l.strip().startswith('FoamFile') and len(l.strip()) > 2]; [print(e) for e in errors[:3]]\" 2>/dev/null || true)"
+          }
+        ]
+      },
+      {
+        "matcher": "Bash",
+        "hooks": [
+          {
+            "type": "command",
+            "command": "echo '[Hook] Příkaz dokončen.' >&2"
+          }
+        ]
+      }
+    ],
+    "Stop": [
+      {
+        "hooks": [
+          {
+            "type": "command",
+            "command": "echo '[Hook] Agent dokončil práci. Výsledky jsou připraveny k prozkoumání.' >&2"
+          }
+        ]
+      }
+    ]
+  },
+
+  "env": {
+    "PYTHONPATH": "/home/user/projects/openfoam_agents",
+    "WM_PROJECT_DIR": "/opt/openfoam10",
+    "NODE_ENV": "development"
+  },
+
+  "model": "claude-sonnet-4-6",
+  "theme": "dark",
+  "autoUpdaterStatus": "enabled"
+}

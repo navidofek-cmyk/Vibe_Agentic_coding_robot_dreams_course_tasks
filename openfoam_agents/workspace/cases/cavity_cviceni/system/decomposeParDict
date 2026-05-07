@@ -1,0 +1,51 @@
+/*--------------------------------*- C++ -*----------------------------------*\
+  OpenFOAM – Cvičení 1: Lid-Driven Cavity
+  Dekompozice domény pro paralelní výpočet (MPI)
+
+  Spuštění paralelně:
+    decomposePar                  ← rozdělí doménu na N sub-domén
+    mpirun -np 4 icoFoam -parallel ← spustí na 4 jádrech
+    reconstructPar                ← sloučí výsledky zpět
+
+  Spuštění přes Docker:
+    docker run --rm -v $(pwd):/case openfoam/openfoam10-default \
+      bash -c "source /opt/openfoam10/etc/bashrc && \
+               cd /case && decomposePar && \
+               mpirun -np 4 icoFoam -parallel && reconstructPar"
+\*---------------------------------------------------------------------------*/
+FoamFile
+{
+    version     2.0;
+    format      ascii;
+    class       dictionary;
+    location    "system";
+    object      decomposeParDict;
+}
+// * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * //
+
+// Počet sub-domén = počet MPI procesů
+numberOfSubdomains  4;
+
+// Metoda dekompozice:
+//   simple     – řezy rovinnými plochami (nejrychlejší nastavení)
+//   scotch     – automatická optimalizace komunikace (nejlepší výsledky)
+//   hierarchical – hierarchické řezy (vhodné pro extrudované geometrie)
+method          scotch;
+
+// Nastavení pro metodu "simple" (ignorováno pro scotch):
+simpleCoeffs
+{
+    // n = (nx ny nz) – kolik řezů v každém směru
+    // nx * ny * nz musí = numberOfSubdomains
+    n       (2 2 1);
+    delta   0.001;
+}
+
+hierarchicalCoeffs
+{
+    n       (2 2 1);
+    delta   0.001;
+    order   xyz;
+}
+
+// ************************************************************************* //

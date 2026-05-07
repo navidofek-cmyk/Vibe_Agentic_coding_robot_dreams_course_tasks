@@ -1,0 +1,85 @@
+/*--------------------------------*- C++ -*----------------------------------*\
+  OpenFOAM – Cvičení 2: Pitz Daily
+  Vzorkování výsledků – srovnání s experimenty Driver & Seegmiller (1985)
+
+  Spuštění po simulaci:
+    postProcess -func sample -latestTime
+
+  Výstup: postProcessing/sample/<time>/
+  Srovnání: python3 examples/plot_residuals.py (nebo vlastní skript)
+\*---------------------------------------------------------------------------*/
+FoamFile
+{
+    version     2.0;
+    format      ascii;
+    class       dictionary;
+    location    "system";
+    object      sampleDict;
+}
+// * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * //
+
+interpolationScheme cellPoint;
+setFormat           csv;
+
+sets
+(
+    // Vertikální profily rychlosti – klasická měření za schdem
+    // x/h = vzdálenost od schodu normalizovaná výškou schodu h=0.0127 m
+
+    profile_x1h     // x/h = 1  →  x = 0.0127 m
+    {
+        type    uniform;
+        axis    y;
+        start   (0.0127  -0.0127  0.0005);
+        end     (0.0127   0.0127  0.0005);
+        nPoints 80;
+    }
+
+    profile_x3h     // x/h = 3  →  x = 0.0381 m
+    {
+        type    uniform;
+        axis    y;
+        start   (0.0381  -0.0127  0.0005);
+        end     (0.0381   0.0127  0.0005);
+        nPoints 80;
+    }
+
+    profile_x6h     // x/h = 6  →  x = 0.0762 m (kolem bodu znovupřichycení)
+    {
+        type    uniform;
+        axis    y;
+        start   (0.0762  -0.0127  0.0005);
+        end     (0.0762   0.0127  0.0005);
+        nPoints 80;
+    }
+
+    profile_x10h    // x/h = 10 →  x = 0.127 m (plně vyvinuté proudění)
+    {
+        type    uniform;
+        axis    y;
+        start   (0.127   -0.0127  0.0005);
+        end     (0.127    0.0127  0.0005);
+        nPoints 80;
+    }
+
+    // Horizontální profil podél dolní stěny – detekce bodu znovupřichycení
+    // Bod znovupřichycení = kde se tečné napětí na stěně (Cf) mění ze záporného na kladné
+    wallProfile_lower
+    {
+        type    uniform;
+        axis    x;
+        start   (0.0    -0.0127  0.0005);
+        end     (0.29   -0.0127  0.0005);
+        nPoints 200;
+    }
+);
+
+fields
+(
+    U         // rychlostní profily
+    p         // tlakový koeficient
+    k         // turbulentní kinetická energie
+    epsilon   // disipace
+);
+
+// ************************************************************************* //

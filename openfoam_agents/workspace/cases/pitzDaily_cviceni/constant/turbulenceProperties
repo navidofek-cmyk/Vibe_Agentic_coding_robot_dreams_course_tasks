@@ -1,0 +1,23 @@
+/*--------------------------------*- C++ -*----------------------------------*\
+  OpenFOAM – Cvičení 2: Pitz Daily
+\*---------------------------------------------------------------------------*/
+FoamFile
+{
+    version     2.0;
+    format      ascii;
+    class       dictionary;
+    location    "constant";
+    object      turbulenceProperties;
+}
+// * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * //
+
+simulationType  RAS;
+
+RAS
+{
+    RASModel    kEpsilon;
+    turbulence  on;
+    printCoeffs on;
+}
+
+// ************************************************************************* //

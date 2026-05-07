@@ -1,0 +1,21 @@
+/*--------------------------------*- C++ -*----------------------------------*\
+  OpenFOAM – Cvičení 1: Lid-Driven Cavity
+  Fyzikální vlastnosti tekutiny
+\*---------------------------------------------------------------------------*/
+FoamFile
+{
+    version     2.0;
+    format      ascii;
+    class       dictionary;
+    location    "constant";
+    object      transportProperties;
+}
+// * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * //
+
+transportModel  Newtonian;
+
+// Kinematická viskozita vody při 20°C ≈ 1e-6 m²/s
+// Pro Re = U*L/ν = 1*0.1/0.01 = 10  →  ν = 0.01
+nu              0.01;
+
+// ************************************************************************* //

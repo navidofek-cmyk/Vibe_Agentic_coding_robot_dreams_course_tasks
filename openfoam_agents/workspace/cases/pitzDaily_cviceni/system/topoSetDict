@@ -1,0 +1,41 @@
+/*--------------------------------*- C++ -*----------------------------------*\
+  OpenFOAM – Cvičení 2: Pitz Daily
+  Výběr skupin buněk pro analýzu recirkulační zóny
+
+  Spuštění:
+    topoSet
+\*---------------------------------------------------------------------------*/
+FoamFile
+{
+    version     2.0;
+    format      ascii;
+    class       dictionary;
+    location    "system";
+    object      topoSetDict;
+}
+// * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * //
+
+actions
+(
+    // Recirkulační zóna za schdem (přibližná poloha, x/h = 0-7)
+    // Stupeň znovupřichycení pro Re≈10000 je přibližně x/h ≈ 6-8
+    {
+        name    recirculation_zone;
+        type    cellSet;
+        action  new;
+        source  boxToCell;
+        //                 xmin      ymin      zmin    xmax     ymax     zmax
+        box     (0.0  -0.0127  0.0) (0.09  0.0  0.001);
+    }
+
+    // Oblast vstupního kanálu (pro sledování vstupního profilu)
+    {
+        name    inlet_channel;
+        type    cellSet;
+        action  new;
+        source  boxToCell;
+        box     (-0.0206  0.0  0.0) (0.0  0.0127  0.001);
+    }
+);
+
+// ************************************************************************* //

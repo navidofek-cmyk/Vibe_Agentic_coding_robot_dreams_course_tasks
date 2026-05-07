@@ -1,0 +1,35 @@
+version: "3.9"
+
+services:
+  openfoam-agent:
+    build: .
+    image: openfoam-learning-assistant:latest
+    container_name: openfoam_agent
+    volumes:
+      - .:/workspace/openfoam_agents        # live reload zdrojových souborů
+      - openfoam_results:/workspace/results  # persistentní výsledky simulací
+    environment:
+      - ANTHROPIC_API_KEY=${ANTHROPIC_API_KEY}
+      - GITHUB_TOKEN=${GITHUB_TOKEN}
+      - BRAVE_API_KEY=${BRAVE_API_KEY}
+      - WM_PROJECT_DIR=/opt/openfoam10
+    stdin_open: true
+    tty: true
+    working_dir: /workspace/openfoam_agents
+
+  openfoam-runner:
+    image: openfoam/openfoam10-default:latest
+    container_name: openfoam_runner
+    volumes:
+      - ./workspace/cases:/cases             # cases jsou přístupné pro spuštění
+      - openfoam_results:/results
+    environment:
+      - WM_PROJECT_DIR=/opt/openfoam10
+    stdin_open: true
+    tty: true
+    working_dir: /cases
+    entrypoint: >
+      bash -c "source /opt/openfoam10/etc/bashrc && bash"
+
+volumes:
+  openfoam_results:

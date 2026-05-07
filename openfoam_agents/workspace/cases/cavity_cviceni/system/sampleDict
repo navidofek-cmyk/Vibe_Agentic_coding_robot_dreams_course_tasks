@@ -1,0 +1,59 @@
+/*--------------------------------*- C++ -*----------------------------------*\
+  OpenFOAM – Cvičení 1: Lid-Driven Cavity
+  Vzorkování výsledků podél čar a na rovinách
+
+  Spuštění:
+    postProcess -func sample -time '0.5'
+
+  Výstup: postProcessing/sample/<time>/<name>_<field>.xy
+  Vizualizace: python3 examples/plot_residuals.py nebo ParaView
+\*---------------------------------------------------------------------------*/
+FoamFile
+{
+    version     2.0;
+    format      ascii;
+    class       dictionary;
+    location    "system";
+    object      sampleDict;
+}
+// * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * //
+
+// Interpolační schéma pro hodnoty na vzorkovacích bodech
+interpolationScheme cellPoint;
+
+// Formát výstupu: gnuplot, raw, csv, vtk
+setFormat       csv;
+
+// Sady vzorkovacích čar/bodů
+sets
+(
+    // Vertikální profil rychlosti ve středu kavity (x = 0.05 m)
+    // Klasické srovnání s experimenty Ghia et al. (1982)
+    centerline_vertical
+    {
+        type            uniform;
+        axis            y;                    // výstupní osa (hodnoty y)
+        start           (0.05 0.0  0.005);    // spodní bod
+        end             (0.05 0.1  0.005);    // horní bod
+        nPoints         100;
+    }
+
+    // Horizontální profil rychlosti ve středu kavity (y = 0.05 m)
+    centerline_horizontal
+    {
+        type            uniform;
+        axis            x;
+        start           (0.0  0.05 0.005);
+        end             (0.1  0.05 0.005);
+        nPoints         100;
+    }
+);
+
+// Pole pro vzorkování
+fields
+(
+    U     // rychlost (vektor)
+    p     // tlak (skalár)
+);
+
+// ************************************************************************* //

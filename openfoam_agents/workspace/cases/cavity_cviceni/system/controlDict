@@ -1,0 +1,103 @@
+```c++
+/*--------------------------------*- C++ -*----------------------------------*\
+  OpenFOAM – Cvičení 1: Lid-Driven Cavity
+  Úkol: Doplň endTime a deltaT.
+\*---------------------------------------------------------------------------*/
+FoamFile
+{
+    version     2.0;
+    format      ascii;
+    class       dictionary;
+    location    "system";
+    object      controlDict;
+}
+// * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * //
+
+application     icoFoam;
+
+// --- Časové řízení --------------------------------------------------------
+
+startFrom       startTime;
+startTime       0;
+
+stopAt          endTime;
+
+// TODO: Nastav čas konce simulace.
+//       Pro Re=10 je vhodné simulovat alespoň 0.5 s.
+endTime         0.5;
+
+// TODO: Nastav časový krok.
+//       Podmínka stability CFL: Co = U * dt / dx < 1
+//       Pro síť 20×20 a U=1: dx = 0.1/20 = 0.005, tedy dt ≤ 0.005
+deltaT          0.004;
+
+// --- Zápis výsledků -------------------------------------------------------
+
+// writeControl:
+//   timeStep   – zapisuj každých N kroků (writeInterval = N)
+//   runTime    – zapisuj každých N sekund simulačního času
+//   adjustableRunTime – automaticky přizpůsobí dt pro čistý zápis
+writeControl    timeStep;
+writeInterval   20;
+
+// purgeWrite: kolik posledních časových kroků ponechat na disku
+// 0 = ponech vše,  3 = ponech pouze poslední 3 (šetří místo)
+purgeWrite      0;
+
+writeFormat     ascii;
+writePrecision  6;
+writeCompression off;
+
+timeFormat      general;
+timePrecision   6;
+
+// Zda znovu načítat slovníky při změně za běhu
+runTimeModifiable true;
+
+// --- Function Objects – automatické výpočty za běhu ----------------------
+// Spouštějí se každý krok, výstup do postProcessing/
+
+functions
+{
+    // Sledování residuálů (konvergence) – zapisuje do postProcessing/solverInfo/
+    residuals
+    {
+        type            solverInfo;
+        libs            (utilityFunctionObjects);
+        fields          (U p);
+        writeResidualFields no;
+    }
+
+    // Minimum a maximum rychlosti v celé doméně
+    fieldMinMax
+    {
+        type            fieldMinMax;
+        libs            (fieldFunctionObjects);
+        fields          (U p);
+        location        yes;        // také vypíše polohu min/max
+        log             yes;
+    }
+
+    // Průměrné hodnoty v topRegion (definované v topoSetDict)
+    // Aktivuj po spuštění topoSet:
+    // averageTopRegion
+    // {
+    //     type            volFieldValue;
+    //     libs            (fieldFunctionObjects);
+    //     regionType      cellSet;
+    //     name            topRegion;
+    //     operation       volAverage;
+    //     fields          (U);
+    // }
+}
+
+// ************************************************************************* //
+```
+
+**Vysvětlení:**
+
+- **endTime = 0.5;** – Simuluji 0.5 sekundy pro dosažení ustáleného stavu při Re=10
+- **deltaT = 0.004;** – Časový krok 0.004 s vyhovuje podmínce CFL (Co = 1 × 0.004 / 0.005 = 0.8 < 1)
+
+**Poznámka ke zpětné vazbě:**
+Hodnota rychlosti na `movingWall` hranici musí být nastavena v souboru `cavity/0/U`, kde by měla být pro x-komponentu kladná (např. `Ux = 1.0

@@ -1,0 +1,32 @@
+/*--------------------------------*- C++ -*----------------------------------*\
+  OpenFOAM – Cvičení 2: Pitz Daily
+  Dekompozice pro paralelní výpočet
+
+  Pitz Daily má protáhlou doménu → optimální řez je pouze ve směru x.
+  Metoda scotch to udělá automaticky.
+
+  Spuštění:
+    decomposePar
+    mpirun -np 4 simpleFoam -parallel 2>&1 | tee log.simpleFoam
+    reconstructPar -latestTime
+\*---------------------------------------------------------------------------*/
+FoamFile
+{
+    version     2.0;
+    format      ascii;
+    class       dictionary;
+    location    "system";
+    object      decomposeParDict;
+}
+// * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * //
+
+numberOfSubdomains  4;
+
+// scotch: automatická dekompozice minimalizující komunikaci mezi procesy
+method          scotch;
+
+// Pro manuální řez pouze ve směru x (protáhlá geometrie pitzDaily):
+// method       simple;
+// simpleCoeffs { n (4 1 1); delta 0.001; }
+
+// ************************************************************************* //

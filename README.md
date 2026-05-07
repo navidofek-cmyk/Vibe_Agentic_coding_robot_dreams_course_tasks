@@ -28,6 +28,22 @@ cd vibe_coding_hw_02
 claude  # spustí nakonfigurovaného agenta
 ```
 
+### `openfoam_agents/` — OpenFOAM Learning Assistant (Claude Code + multi-agent simulace)
+CFD výukový asistent postavený na Claude Code CLI. Agent provází studenty světem OpenFOAM od struktury case souborů po analýzu výsledků simulace.
+- **4 agenti:** orchestrátor + Explore + Plan + General-purpose (paralelní generování testů)
+- **5 MCP serverů:** filesystem, github, brave-search, sqlite, memory
+- **5 slash příkazů:** `/case`, `/check`, `/explain`, `/run`, `/progress`
+- **2 cvičení:** lid-driven cavity (icoFoam) + Pitz Daily turbulence (simpleFoam k-ε)
+- **student-teacher simulace:** `simulation.py` — dva Claude agenti přes `claude -p` CLI, pytest feedback loop
+
+```bash
+cd openfoam_agents
+claude   # spustí OpenFOAM Learning Assistant
+
+# nebo spusť simulaci student vs. učitel:
+python3 simulation.py
+```
+
 ### `hw_01/` — OpenAI Tool Calling
 Ukázka tool callingu přes OpenAI API, spouštěna přes `uv`.
 

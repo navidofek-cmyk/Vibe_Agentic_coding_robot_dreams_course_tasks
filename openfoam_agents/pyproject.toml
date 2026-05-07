@@ -1,0 +1,10 @@
+[project]
+name = "openfoam-agents"
+version = "0.1.0"
+description = "Add your description here"
+requires-python = ">=3.12"
+dependencies = [
+    "anthropic>=0.100.0",
+    "matplotlib>=3.10.9",
+    "pytest>=9.0.3",
+]

@@ -1,0 +1,4 @@
+matplotlib>=3.8
+fluidfoam>=0.2.4
+numpy>=1.26
+pytest>=8.0

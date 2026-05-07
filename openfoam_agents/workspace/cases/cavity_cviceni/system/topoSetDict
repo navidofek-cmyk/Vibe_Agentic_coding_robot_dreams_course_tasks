@@ -1,0 +1,44 @@
+/*--------------------------------*- C++ -*----------------------------------*\
+  OpenFOAM – Cvičení 1: Lid-Driven Cavity
+  Výběr skupin buněk (cellSet) a ploch (faceSet)
+
+  Použití: výpočet průměrných hodnot v oblasti, zjemnění sítě v určité zóně.
+
+  Spuštění:
+    topoSet
+
+  Vytvoří: constant/polyMesh/sets/
+\*---------------------------------------------------------------------------*/
+FoamFile
+{
+    version     2.0;
+    format      ascii;
+    class       dictionary;
+    location    "system";
+    object      topoSetDict;
+}
+// * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * //
+
+actions
+(
+    // Vytvoř sadu buněk v horní čtvrtině kavity (blízko víka)
+    // Účel: sledovat střední kinetickou energii u pohybující se stěny
+    {
+        name    topRegion;
+        type    cellSet;
+        action  new;
+        source  boxToCell;
+        box     (0.0 0.075 0.0) (0.1 0.1 0.01);  // x_min y_min z_min  x_max y_max z_max
+    }
+
+    // Vytvoř sadu buněk ve středu kavity
+    {
+        name    centerRegion;
+        type    cellSet;
+        action  new;
+        source  boxToCell;
+        box     (0.025 0.025 0.0) (0.075 0.075 0.01);
+    }
+);
+
+// ************************************************************************* //

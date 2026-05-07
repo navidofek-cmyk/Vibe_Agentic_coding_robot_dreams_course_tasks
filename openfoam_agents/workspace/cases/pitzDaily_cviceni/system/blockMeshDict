@@ -1,0 +1,153 @@
+/*--------------------------------*- C++ -*----------------------------------*\
+  OpenFOAM – Cvičení 2: Pitz Daily (Backward-Facing Step)
+
+  Geometrie (2D pohled z boku):
+
+  y=0.0127  3══════════════════2═══════════════════════5
+            ║    Blok A        ║         Blok B (top)  ║
+  inlet →   ║  (inlet channel) ║                       ║ → outlet
+            ║                  ║                       ║
+  y=0       0══════════════════1═══════════════════════4
+                               ║         Blok C (bot)  ║
+  y=-0.0127                   6═══════════════════════7
+                               ↑ schod
+                               x=0
+
+  Rozměry:
+    h  = 0.0127 m  (výška vstupního kanálu = výška schodu)
+    H  = 0.0254 m  (výška za schdem = 2h)
+    L1 = 0.0206 m  (délka vstupního kanálu)
+    L2 = 0.29   m  (délka za schdem)
+    dz = 0.001  m  (hloubka – 1 buňka, BC = empty → 2D výpočet)
+
+  Bloky:
+    A: inlet channel  x ∈ [-L1, 0], y ∈ [0, h]
+    B: top downstream x ∈ [0, L2],  y ∈ [0, h]
+    C: bot downstream x ∈ [0, L2],  y ∈ [-h, 0]
+\*---------------------------------------------------------------------------*/
+FoamFile
+{
+    version     2.0;
+    format      ascii;
+    class       dictionary;
+    location    "system";
+    object      blockMeshDict;
+}
+// * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * //
+
+scale   1;
+
+vertices
+(
+    // --- Přední plocha (z = 0) ---
+    //       x          y         z
+    (-0.0206  0.0        0.0)   //  0  ←  Blok A spodní-levý
+    ( 0.0      0.0        0.0)   //  1  ←  roh schodu (sdílený A/B/C)
+    ( 0.0      0.0127     0.0)   //  2  ←  Blok A horní-pravý = Blok B horní-levý
+    (-0.0206  0.0127     0.0)   //  3  ←  Blok A horní-levý
+    ( 0.29     0.0        0.0)   //  4  ←  Blok B/C pravý spodní
+    ( 0.29     0.0127     0.0)   //  5  ←  Blok B pravý horní
+    ( 0.0     -0.0127     0.0)   //  6  ←  Blok C levý spodní
+    ( 0.29    -0.0127     0.0)   //  7  ←  Blok C pravý spodní
+
+    // --- Zadní plocha (z = 0.001) --- (stejná x-y, posunutá o dz)
+    (-0.0206  0.0        0.001)  //  8
+    ( 0.0      0.0        0.001)  //  9
+    ( 0.0      0.0127     0.001)  // 10
+    (-0.0206  0.0127     0.001)  // 11
+    ( 0.29     0.0        0.001)  // 12
+    ( 0.29     0.0127     0.001)  // 13
+    ( 0.0     -0.0127     0.001)  // 14
+    ( 0.29    -0.0127     0.001)  // 15
+);
+
+blocks
+(
+    // Blok A – vstupní kanál
+    // hex (v0 v1 v2 v3  v4 v5 v6 v7) (nx ny nz) grading
+    // Pořadí vrcholů: spodní-levý → spodní-pravý → horní-pravý → horní-levý (přední),
+    //                 pak totéž vzadu.
+    hex (0 1 2 3  8 9 10 11)
+        (50 20 1)
+        simpleGrading (1 1 1)
+
+    // Blok B – horní část za schdem (y = 0 → h)
+    hex (1 4 5 2  9 12 13 10)
+        (120 20 1)
+        simpleGrading (1 1 1)
+
+    // Blok C – dolní část za schdem (y = -h → 0)
+    hex (6 7 4 1  14 15 12 9)
+        (120 20 1)
+        simpleGrading (1 1 1)
+);
+
+edges
+(
+    // Přímé hrany – žádné zakřivení
+);
+
+boundary
+(
+    inlet
+    {
+        type patch;
+        faces
+        (
+            (3 0 8 11)   // levá stěna bloku A
+        );
+    }
+    outlet
+    {
+        type patch;
+        faces
+        (
+            (4 5 13 12)   // pravá stěna bloku B
+            (7 4 12 15)   // pravá stěna bloku C
+        );
+    }
+    upperWall
+    {
+        type wall;
+        faces
+        (
+            (3 2 10 11)   // horní stěna bloku A
+            (2 5 13 10)   // horní stěna bloku B
+        );
+    }
+    lowerWall
+    {
+        type wall;
+        faces
+        (
+            (0 1 9 8)    // dno bloku A (= plošina schodu)
+            (6 7 15 14)  // dno bloku C
+        );
+    }
+    step
+    {
+        // Svislá stěna schodu (x=0, y=-h → 0)
+        type wall;
+        faces
+        (
+            (1 6 14 9)
+        );
+    }
+    frontAndBack
+    {
+        type empty;
+        faces
+        (
+            // přední plochy (z=0)
+            (0 3 2 1)    // Blok A
+            (1 2 5 4)    // Blok B
+            (6 1 4 7)    // Blok C
+            // zadní plochy (z=0.001)
+            (8 9 10 11)  // Blok A
+            (9 12 13 10) // Blok B
+            (14 9 12 15) // Blok C (pozn: obráceně kvůli normalě)
+        );
+    }
+);
+
+// ************************************************************************* //
